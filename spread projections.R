@@ -153,7 +153,8 @@ return(df)
 
 }
 
-
+cl <- makeCluster(detectCores() - 1)  # Use all but one core
+registerDoParallel(cl)
 
 
 maximize_r_squared <- function(B) {
@@ -235,6 +236,12 @@ result <- DEoptim(
   upper = upper_bound,
   control = list(trace = TRUE, NP = 4, itermax = 1)
 )
+
+
+
+
+
+
 
 optimal_beta <- result$optim$bestmem
 
