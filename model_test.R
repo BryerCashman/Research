@@ -64,3 +64,7 @@ ggplot(grid,aes(x = home_epa_pp,y = away_epa_pp_allowed,color = proj_spread)) +
 
 mean(grid$proj_spread)  
 
+proj_model <- model2
+
+save(proj_model, file = "/Users/bryer/Documents/NFL Projects/proj_model.RDS")
+

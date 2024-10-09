@@ -164,7 +164,6 @@ maximize_r_squared <- function(B) {
   df_test <- df[-dt,]
   
   model <- mgcv::gam(point_diff ~ s(home_epa_pp,away_epa_pp_allowed) + s(away_epa_pp,home_epa_pp_allowed) 
-                     + s(home_run_epa_pp,away_run_epa_pp_allowed) + s(away_run_epa_pp,home_run_epa_pp_allowed) 
                      + s(home_qb_epa_per_play,home_total_db) + s(away_qb_epa_per_play,away_total_db),data = df_train)
   
   df_test$proj_spread <- predict(model, df_test)
