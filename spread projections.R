@@ -230,7 +230,7 @@ result <- DEoptim(
 
 
 
-
+result
 
 
 
