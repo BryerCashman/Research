@@ -1,11 +1,14 @@
 library(tidyverse)
 library(mgcv)
+options(dplyr.summarise.inform = FALSE)
+addTaskCallback(function(...) {set.seed(123); TRUE})
 
-optimal_beta <- 0.9905928 
+#optimal_beta <- 0.9905928 
+other_b <- 0.9974176
 
 
 
-df_with_optim <- summary_data(optimal_beta)
+df_with_optim <- summary_data(other_b)
 
 
 dt <- sample(nrow(df_with_optim), 0.75*nrow(df_with_optim))
@@ -66,5 +69,5 @@ mean(grid$proj_spread)
 
 proj_model <- model2
 
-save(proj_model, file = "/Users/bryer/Documents/NFL Projects/proj_model.RDS")
+save(proj_model, file = "/Users/bryer/GitHub/Research/proj_model.RDS")
 
