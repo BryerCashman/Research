@@ -7,8 +7,7 @@ library(lubridate)
 library(mgcv)
 library(DEoptim)
 library(data.table)
-library(doParallel)
-library(foreach)
+library(profvis)
 options(dplyr.summarise.inform = FALSE)
 
 addTaskCallback(function(...) {set.seed(123); TRUE}) 
@@ -17,11 +16,11 @@ addTaskCallback(function(...) {set.seed(123); TRUE})
 
 
 data <- load_pbp(2015:2024) %>%
-  filter(season_type == "REG",(rush == 1 | pass == 1)) 
+  filter(season_type == "REG",(rush == 1 | pass == 1) )
 
-data <- data %>% mutate(game_date = as.Date(game_date))
+data <- data %>% mutate(game_date = as.Date(game_date)) %>% filter(!is.na(epa))
 
-data <- as.data.table(data)
+
 
 dates <- unique(data$game_date)
 
@@ -43,8 +42,6 @@ summary_data <- function(B){
   
   print(paste0("Starting new trial at ",Sys.time()))
 
-  cl <- makeCluster(detectCores() - 1)  # Use all but one core
-  registerDoParallel(cl)
   
 offense_data <- data.frame()
 
@@ -72,15 +69,15 @@ for(i in 1:length(dates)){
   
   teams <- rbind(home_teams,away_teams)
   
-  years_data <- data %>% filter(game_date < dates[i],game_date > (dates[i] - years(3))) %>% as.data.table()
+  years_data <- data %>% filter(game_date < dates[i],game_date > (dates[i] - years(3)))
   
   offense_date <- years_data %>%
     filter(game_date < dates[i], posteam %in% teams$team,!is.na(posteam)) %>%
     mutate(days_diff = as.numeric(difftime(dates[i],game_date, "days"))) %>%
     group_by(posteam) %>%
-    dplyr::summarize(epa_per_play = mean((epa * B^days_diff)/B^days_diff, na.rm = T),
+    dplyr::summarize(epa_per_play = sum(epa * B^days_diff, na.rm = T)/sum(B^days_diff, na.rm = T),
                      #pass_epa_per_play = mean((epa[pass == 1] * B^days_diff)/B^days_diff,na.rm = T),
-                     run_epa_per_play = mean((epa[rush == 1] * B^days_diff)/B^days_diff,na.rm = T),
+                     run_epa_per_play = sum((epa * B^days_diff)[rush==1], na.rm = T)/sum(B^days_diff[rush == 1], na.rm = T),
                      #success_rate = mean((success * B^days_diff)/B^days_diff,na.rm = T),
                      #plays = n()
                      ) %>%
@@ -91,9 +88,9 @@ for(i in 1:length(dates)){
     filter(game_date < dates[i], defteam %in% teams$team,  !is.na(defteam)) %>%
     mutate(days_diff = as.numeric(difftime(dates[i],game_date, "days"))) %>%
     group_by(defteam) %>%
-    dplyr::summarize(epa_per_play_allowed =  mean((epa * B^days_diff)/B^days_diff, na.rm = T),
+    dplyr::summarize(epa_per_play_allowed =  sum(epa * B^days_diff, na.rm = T)/sum(B^days_diff, na.rm = T),
                      #pass_epa_per_play_allowed = mean((epa[pass == 1] * B^days_diff)/B^days_diff,na.rm = T),
-                     run_epa_per_play_allowed = mean((epa[rush == 1] * B^days_diff)/B^days_diff,na.rm = T),
+                     run_epa_per_play_allowed = sum((epa * B^days_diff)[rush==1], na.rm = T)/sum(B^days_diff[rush == 1], na.rm = T),
                      #success_rate_allowed = mean((success * B^days_diff)/B^days_diff,na.rm = T),
                      #plays = n()
                      ) %>%
@@ -105,7 +102,7 @@ for(i in 1:length(dates)){
     mutate(days_diff = as.numeric(difftime(dates[i],game_date, "days"))) %>%
     group_by(id,name) %>%
     mutate(qb_success = ifelse(qb_epa > 0,1,0)) %>%
-    dplyr::summarize(qb_epa_per_play = mean((qb_epa * B^days_diff)/B^days_diff, na.rm = T),
+    dplyr::summarize(qb_epa_per_play = sum((qb_epa * B^days_diff), na.rm = T)/sum(B^days_diff, na.rm = T),
                      #qb_total_epa_two_year = sum((qb_epa *B^days_diff)/B^days_diff ,na.rm = T),
                      games_played = length(unique(game_id)),
                      #qb_epa_per_game = qb_total_epa_two_year/games_played,
@@ -119,28 +116,29 @@ for(i in 1:length(dates)){
   defense_data <- rbind(defense_data,defense_date)
   qb_data <- rbind(qb_data, qb_date)
     
+  rm(qb_date,defense_date,qb_date,home_teams,teams,away_teams)
 }
 
 
 qb_data <- qb_data %>%
   mutate(total_dbs = dropbacks_per_game * games_played)
 
-df <- left_join(games,qb_data %>% filter(dropbacks_per_game > 5), by = c("game_date" = "date","starting_home_qb" = "name","starting_home_id" = "id")) %>%
+df <- inner_join(games,qb_data %>% filter(dropbacks_per_game > 5), by = c("game_date" = "date","starting_home_qb" = "name","starting_home_id" = "id")) %>%
   rename(home_qb_id = starting_home_id,home_qb_epa_per_play = qb_epa_per_play, home_qb_games_played = games_played,
           home_qb_db_per_game = dropbacks_per_game,home_total_db = total_dbs) %>%
-  left_join(qb_data %>% filter(dropbacks_per_game > 5),by = c("game_date" = "date","starting_away_qb" = "name","starting_away_id" = "id")) %>%
+  inner_join(qb_data %>% filter(dropbacks_per_game > 5),by = c("game_date" = "date","starting_away_qb" = "name","starting_away_id" = "id")) %>%
   rename(away_qb_id = starting_away_id,away_qb_epa_per_play = qb_epa_per_play, away_qb_games_played = games_played,
           away_qb_db_per_game = dropbacks_per_game, away_total_db = total_dbs) %>%
-  left_join(offense_data, by = c("game_date" = "date","home_team" = "posteam")) %>%
+  inner_join(offense_data, by = c("game_date" = "date","home_team" = "posteam")) %>%
   rename(home_epa_pp = epa_per_play,  home_run_epa_pp = run_epa_per_play,
         ) %>%
-  left_join(offense_data, by = c("game_date" = "date","away_team" = "posteam")) %>%
+  inner_join(offense_data, by = c("game_date" = "date","away_team" = "posteam")) %>%
   rename(away_epa_pp = epa_per_play,  away_run_epa_pp = run_epa_per_play, 
          ) %>%
-  left_join(defense_data, by = c("game_date" = "date","home_team" = "defteam")) %>%
+  inner_join(defense_data, by = c("game_date" = "date","home_team" = "defteam")) %>%
   rename(home_epa_pp_allowed = epa_per_play_allowed, home_run_epa_pp_allowed = run_epa_per_play_allowed,
          ) %>%
-  left_join(defense_data, by = c("game_date" = "date","away_team" = "defteam")) %>%
+  inner_join(defense_data, by = c("game_date" = "date","away_team" = "defteam")) %>%
   rename(away_epa_pp_allowed = epa_per_play_allowed,  away_run_epa_pp_allowed = run_epa_per_play_allowed
          ) %>%
   arrange(desc(game_date)) %>%
@@ -153,8 +151,8 @@ return(df)
 
 }
 
-cl <- makeCluster(detectCores() - 1)  # Use all but one core
-registerDoParallel(cl)
+# cl <- makeCluster(detectCores() - 1)  # Use all but one core
+# registerDoParallel(cl)
 
 
 maximize_r_squared <- function(B) {
@@ -220,12 +218,6 @@ maximize_r_squared <- function(B) {
 # 
 # cor(df_test$point_diff,df_test$proj_spread) ^ 2
 # 
-# r_squared <- function(true_values, predicted_values) {
-#   ss_res <- sum((true_values - predicted_values)^2)
-#   ss_tot <- sum((true_values - mean(true_values))^2)
-#   r2 <- 1 - (ss_res / ss_tot)
-#   return(r2)
-# }
 
 lower_bound <- .850
 upper_bound <- .999
@@ -234,7 +226,7 @@ result <- DEoptim(
   fn = maximize_r_squared, 
   lower = lower_bound, 
   upper = upper_bound,
-  control = list(trace = TRUE, NP = 4, itermax = 1)
+  control = list(trace = TRUE, NP = 10, itermax = 5)
 )
 
 
