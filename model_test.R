@@ -1,5 +1,6 @@
 library(tidyverse)
 library(mgcv)
+library(nflreadr)
 options(dplyr.summarise.inform = FALSE)
 addTaskCallback(function(...) {set.seed(123); TRUE})
 
@@ -8,7 +9,7 @@ other_b <- 0.9974176
 
 
 
-df_with_optim <- summary_data(1)
+df_with_optim <- summary_data(other_b)
 
 
 dt <- sample(nrow(df_with_optim), 0.75*nrow(df_with_optim))
@@ -27,9 +28,18 @@ model2 <-  mgcv::gam(point_diff ~ s(home_epa_pp,away_epa_pp_allowed) + s(away_ep
 summary(model)
 summary(model2)
 
+schedule <- nflreadr::load_schedules() %>% mutate(gameday = as.Date(gameday))
+
 df_test$proj_spread <- predict(model2, df_test)
 
-df_test <- df_test %>% relocate(proj_spread,.before = point_diff) %>% filter(game_date > as.Date("2016-03-10"))
+df_test <- df_test %>% relocate(proj_spread,.before = point_diff) %>% filter(game_date > as.Date("2016-03-10")) %>%
+  left_join(schedule %>% select(season,week,home_team,away_team,spread_line,gameday),by = c("game_date" = "gameday","home_team","away_team")) %>%
+  relocate(spread_line, .before = point_diff)
+
+
+
+cor(df_test$spread_line,df_test$proj_spread) ^2
+cor(df_test$spread_line,df_test$point_diff) ^ 2
 
 r2 <- cor(df_test$proj_spread,df_test$point_diff) ^ 2
 
@@ -71,3 +81,18 @@ proj_model <- model2
 
 save(proj_model, file = "/Users/bryer/GitHub/Research/proj_model.RDS")
 
+
+### Vs actual spread
+
+df_with_optim$proj_spread <- predict(proj_model,df_with_optim)
+
+check <- df_with_optim %>% filter(game_date > as.Date("2016-03-10"))
+
+overall_r2 <- cor(check$proj_spread,check$point_diff) ^2
+
+spreads <- df_with_optim %>% relocate(proj_spread,.before = point_diff) %>% filter(game_date > as.Date("2016-03-10")) %>%
+  left_join(schedule %>% select(season,week,home_team,away_team,spread_line,gameday),by = c("game_date" = "gameday","home_team","away_team")) %>%
+  relocate(spread_line, .before = point_diff) %>%
+  filter(!is.na(spread_line))
+
+spreads_r2 <- cor(check$proj_spread,check$point_diff) ^2
