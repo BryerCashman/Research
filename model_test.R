@@ -8,7 +8,7 @@ other_b <- 0.9974176
 
 
 
-df_with_optim <- summary_data(other_b)
+df_with_optim <- summary_data(1)
 
 
 dt <- sample(nrow(df_with_optim), 0.75*nrow(df_with_optim))
