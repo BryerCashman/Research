@@ -9,7 +9,7 @@ library(purrr)
 
 
 data <- load_pbp(2022:2024) %>%
-  filter(season_type == "REG",(rush == 1 | pass == 1) )
+  filter((rush == 1 | pass == 1) )
 
 
 B <- optimal_beta <- 0.9974176
@@ -173,11 +173,15 @@ wordmark <- df %>%
   # Center the text in the body cells
   tab_style(
     style = cell_text(align = "center"),
-    locations = cells_column_labels(columns = c(team, total, team2, total2))
+    locations = cells_column_labels(columns = c(team, total, team2, total2,Rank,Rank2))
   ) %>%
   tab_style(
     style = cell_text(align = "center"),
     locations = cells_body(columns = c(team, total, team2, total2))
+  ) %>%
+  tab_style(
+    style = cell_text(size = px(25)),
+    locations = cells_body(columns = c( total,  total2))
   ) %>%
   cols_label(
     team = "Team",
@@ -205,8 +209,23 @@ wordmark <- df %>%
   tab_style(
     style = cell_text(size = px(30), font = "Arial", weight = "bold",align = "center"),
     locations = cells_body(columns = c(Rank,Rank2))
-  )%>% 
+  ) %>%
+  tab_style(
+    style = cell_text(size = px(30), font = "Arial", weight = "bold",align = "center"),
+    locations = cells_title(groups = "title")
+  )
+
+wordmark
+
+wordmark %>% 
   gtsave("/Users/bryer/Documents/NFL Projects/Power Ratings/wordmark.png")
+
+
+
+
+
+
+
 
 logos <- df %>%
   gt() %>%
