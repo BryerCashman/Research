@@ -10,6 +10,13 @@ other_b <- 0.9974176
 
 
 df_with_optim <- summary_data(other_b)
+df_with_optim_new_games <- summary_data(other_b)
+
+where <- df_with_optim %>%
+  filter(!game_id %in% df_with_optim_new_games$game_id)
+
+where2 <- df_with_optim_new_games %>%
+  filter(!game_id %in% df_with_optim$game_id)
 
 
 dt <- sample(nrow(df_with_optim), 0.75*nrow(df_with_optim))
@@ -25,21 +32,20 @@ df_test <- df_with_optim[-dt,]
 model2 <-  mgcv::gam(point_diff ~ s(home_epa_pp,away_epa_pp_allowed) + s(away_epa_pp,home_epa_pp_allowed) 
                      + s(home_qb_epa_per_play,home_total_db) + s(away_qb_epa_per_play,away_total_db),data = df_train)
 
-summary(model)
+
 summary(model2)
 
 schedule <- nflreadr::load_schedules() %>% mutate(gameday = as.Date(gameday))
 
-df_test$proj_spread <- predict(model2, df_test)
-
-df_test <- df_test %>% relocate(proj_spread,.before = point_diff) %>% filter(game_date > as.Date("2016-03-10")) %>%
-  left_join(schedule %>% select(season,week,home_team,away_team,spread_line,gameday),by = c("game_date" = "gameday","home_team","away_team")) %>%
-  relocate(spread_line, .before = point_diff)
+load("~/Documents/GitHub/Research/proj_model.RDS")
 
 
+df_test$proj_spread <- predict(proj_model, df_test)
 
-cor(df_test$spread_line,df_test$proj_spread) ^2
-cor(df_test$spread_line,df_test$point_diff) ^ 2
+df_test <- df_test %>% relocate(proj_spread,.before = point_diff) %>% filter(game_date > as.Date("2016-03-10")) 
+
+
+
 
 r2 <- cor(df_test$proj_spread,df_test$point_diff) ^ 2
 

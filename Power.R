@@ -8,6 +8,7 @@ library(scales)
 library(purrr)
 
 
+
 data <- load_pbp(2022:2024) %>%
   filter((rush == 1 | pass == 1) )
 

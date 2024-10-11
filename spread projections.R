@@ -13,20 +13,40 @@ options(dplyr.summarise.inform = FALSE)
 addTaskCallback(function(...) {set.seed(123); TRUE}) 
 
 
+convert_name <- function(name) {
+  # Extract first name initial
+  first_initial <- str_sub(name, 1, 1)
+  
+  # Extract last name (everything before a possible suffix)
+  last_name <- str_extract(name, "(?<= )[A-Za-z]+")
+  
+  # Extract suffix (if present)
+  suffix <- str_extract(name, "(?<= )[IVXLC]+$|Jr\\.?$")
+  
+  # Combine the first initial, last name, and suffix (if present)
+  ifelse(!is.na(suffix), 
+         str_c(first_initial, ".", last_name, " ", suffix),
+         str_c(first_initial, ".", last_name))
+}
+
+
 
 
 data <- load_pbp(2015:2024) %>%
   filter(season_type == "REG",(rush == 1 | pass == 1) )
 
-data <- data %>% mutate(game_date = as.Date(game_date)) %>% filter(!is.na(epa))
+data <- data %>% mutate(game_date = as.Date(game_date),
+                        name = ifelse(name == "G.Minshew II","G.Minshew",
+                                      ifelse(name == "R.Griffin III","R.Griffin",name))) %>% 
+  filter(!is.na(epa))
 
 
 
-dates <- unique(data$game_date)
+  dates <- unique(data$game_date)
 
 games <- data %>%
   group_by(game_id,game_date,home_team,away_team) %>%
-  dplyr::summarize(home_team_score = last(total_home_score),
+  dplyr::summarize(home_team_score = last(total_home_score) ,
                    away_team_score = last(total_away_score),
                    point_diff = home_team_score - away_team_score,
                    starting_home_qb = first(name[posteam == home_team & !is.na(qb_epa) & !is.na(name) & play_type == "pass"]),
@@ -34,6 +54,20 @@ games <- data %>%
                    starting_away_qb = first(name[posteam == away_team & !is.na(qb_epa) & !is.na(name) & play_type == "pass"]),
                    starting_away_id = first(id[posteam == away_team & !is.na(qb_epa) & !is.na(name) & play_type == "pass"]),) %>%
   ungroup()
+
+sched <- nflreadr::load_schedules()
+
+games <- sched %>% 
+  filter(season %in% c(2015:2024),game_type == "REG",!is.na(home_score)) %>%
+  mutate(home_qb_name = ifelse(home_qb_name == "Gardner Minshew II","Gardner Minshew",home_qb_name),
+         away_qb_name = ifelse(away_qb_name == "Gardner Minshew II","Gardner Minshew",away_qb_name)) %>%
+  select(game_id,game_date = gameday,home_team,away_team,
+         home_team_score = home_score,away_team_score = away_score,point_diff = result,
+         starting_home_qb = home_qb_name,starting_home_id = home_qb_id,
+         starting_away_qb = away_qb_name,starting_away_id = away_qb_id) %>%
+  mutate(starting_home_qb = convert_name(starting_home_qb),
+           starting_away_qb = convert_name(starting_away_qb),
+         game_date = as.Date(game_date))
 
 
 master_qb_list <- rbind(games$starting_home_qb,games$starting_away_qb) %>% unique()
