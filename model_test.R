@@ -89,10 +89,20 @@ df_with_optim$proj_spread <- predict(proj_model,df_with_optim)
 check <- df_with_optim %>% filter(game_date > as.Date("2016-03-10"))
 
 overall_r2 <- cor(check$proj_spread,check$point_diff) ^2
+overall_rmse <- Metrics::rmse(check$proj_spread,check$point_diff)
 
 spreads <- df_with_optim %>% relocate(proj_spread,.before = point_diff) %>% filter(game_date > as.Date("2016-03-10")) %>%
   left_join(schedule %>% select(season,week,home_team,away_team,spread_line,gameday),by = c("game_date" = "gameday","home_team","away_team")) %>%
   relocate(spread_line, .before = point_diff) %>%
   filter(!is.na(spread_line))
 
-spreads_r2 <- cor(check$proj_spread,check$point_diff) ^2
+spreads_r2 <- cor(spreads$spread_line,spreads$point_diff) ^2
+spreads_rmse <- Metrics::rmse(spreads$spread_line,spreads$point_diff)
+
+print(paste0("My model r^2: ",round(overall_r2,2)," Vegas r^2: ",round(spreads_r2,2)," My model rmse: ",round(overall_rmse,2), " Vegas rmse: ",round(spreads_rmse,2)))
+
+big_disagreements <- spreads %>%
+  filter(abs(proj_spread - spread_line) > 6)
+
+Metrics::rmse(big_disagreements$spread_line,big_disagreements$point_diff)
+Metrics::rmse(big_disagreements$proj_spread,big_disagreements$point_diff)

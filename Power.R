@@ -218,7 +218,7 @@ wordmark <- df %>%
 wordmark
 
 wordmark %>% 
-  gtsave("/Users/bryer/Documents/NFL Projects/Power Ratings/wordmark.png")
+  gtsave(paste0("/Users/bryer/Documents/NFL Projects/Power Ratings/wordmark",current_week,".png"))
 
 
 
