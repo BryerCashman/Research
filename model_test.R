@@ -10,7 +10,7 @@ other_b <- 0.9974176
 
 
 df_with_optim <- summary_data(other_b)
-df_with_optim_new_games <- summary_data(other_b)
+
 
 where <- df_with_optim %>%
   filter(!game_id %in% df_with_optim_new_games$game_id)
@@ -40,7 +40,7 @@ schedule <- nflreadr::load_schedules() %>% mutate(gameday = as.Date(gameday))
 load("~/Documents/GitHub/Research/proj_model.RDS")
 
 
-df_test$proj_spread <- predict(proj_model, df_test)
+df_test$proj_spread <- predict(model2, df_test)
 
 df_test <- df_test %>% relocate(proj_spread,.before = point_diff) %>% filter(game_date > as.Date("2016-03-10")) 
 

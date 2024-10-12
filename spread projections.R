@@ -8,6 +8,7 @@ library(mgcv)
 library(DEoptim)
 library(data.table)
 library(profvis)
+library(stringr)
 options(dplyr.summarise.inform = FALSE)
 
 addTaskCallback(function(...) {set.seed(123); TRUE}) 
@@ -17,8 +18,8 @@ convert_name <- function(name) {
   # Extract first name initial
   first_initial <- str_sub(name, 1, 1)
   
-  # Extract last name (everything before a possible suffix)
-  last_name <- str_extract(name, "(?<= )[A-Za-z]+")
+  # Extract last name (allowing for apostrophes or hyphens)
+  last_name <- str_extract(name, "(?<= )[A-Za-z'\\-]+")
   
   # Extract suffix (if present)
   suffix <- str_extract(name, "(?<= )[IVXLC]+$|Jr\\.?$")
@@ -43,21 +44,32 @@ data <- data %>% mutate(game_date = as.Date(game_date),
 
 
   dates <- unique(data$game_date)
+  
+  sched <- nflreadr::load_schedules() %>% filter(season %in% c(2015:2024)) %>%
+    mutate(home_qb_name = convert_name(home_qb_name),
+           away_qb_name = convert_name(away_qb_name),
+           home_team = ifelse(home_team == "OAK","LV",ifelse(home_team == "SD","LAC",ifelse(home_team == "STL","LA",home_team))),
+           away_team = ifelse(away_team == "OAK","LV",ifelse(away_team == "SD","LAC",ifelse(away_team == "STL","LA",away_team))))
+  
+  master_qb_list <- rbind(sched$home_qb_name,sched$away_qb_name) %>% unique()
+  master_id_list <- rbind(sched$home_qb_id,sched$away_qb_id) %>% unique()
+  
+  
 
 games <- data %>%
   group_by(game_id,game_date,home_team,away_team) %>%
   dplyr::summarize(home_team_score = last(total_home_score) ,
                    away_team_score = last(total_away_score),
                    point_diff = home_team_score - away_team_score,
-                   starting_home_qb = first(name[posteam == home_team & !is.na(qb_epa) & !is.na(name) & play_type == "pass"]),
-                   starting_home_id = first(id[posteam == home_team & !is.na(qb_epa) & !is.na(name) & play_type == "pass"]),
-                   starting_away_qb = first(name[posteam == away_team & !is.na(qb_epa) & !is.na(name) & play_type == "pass"]),
-                   starting_away_id = first(id[posteam == away_team & !is.na(qb_epa) & !is.na(name) & play_type == "pass"]),) %>%
+                   starting_home_qb = first(name[posteam == home_team & !is.na(qb_epa) & !is.na(name) & play_type == "pass" & (name %in% master_qb_list)]),
+                   starting_home_id = first(id[posteam == home_team & !is.na(qb_epa) & !is.na(name) & play_type == "pass" & (id %in% master_id_list)]),
+                   starting_away_qb = first(name[posteam == away_team & !is.na(qb_epa) & !is.na(name) & play_type == "pass" & (name %in% master_qb_list)]),
+                   starting_away_id = first(id[posteam == away_team & !is.na(qb_epa) & !is.na(name) & play_type == "pass" & (id %in% master_id_list)]),) %>%
   ungroup()
 
-sched <- nflreadr::load_schedules()
 
-games <- sched %>% 
+
+games2 <- sched %>% 
   filter(season %in% c(2015:2024),game_type == "REG",!is.na(home_score)) %>%
   mutate(home_qb_name = ifelse(home_qb_name == "Gardner Minshew II","Gardner Minshew",home_qb_name),
          away_qb_name = ifelse(away_qb_name == "Gardner Minshew II","Gardner Minshew",away_qb_name)) %>%
@@ -69,8 +81,16 @@ games <- sched %>%
            starting_away_qb = convert_name(starting_away_qb),
          game_date = as.Date(game_date))
 
+my_games <- games %>%
+  select(game_id,starting_home_qb,starting_home_id,starting_away_qb,starting_away_id)
 
-master_qb_list <- rbind(games$starting_home_qb,games$starting_away_qb) %>% unique()
+test_games <- games2 %>%
+  select(game_id,game_date,home_team,away_team,home_team_score,away_team_score,point_diff) %>%
+  left_join(my_games,by = "game_id")
+  
+
+games <- test_games
+
 
 summary_data <- function(B){
   
@@ -157,10 +177,10 @@ for(i in 1:length(dates)){
 qb_data <- qb_data %>%
   mutate(total_dbs = dropbacks_per_game * games_played)
 
-df <- inner_join(games,qb_data %>% filter(dropbacks_per_game > 5), by = c("game_date" = "date","starting_home_qb" = "name","starting_home_id" = "id")) %>%
+df <- inner_join(games,qb_data %>% filter(dropbacks_per_game > 3), by = c("game_date" = "date","starting_home_qb" = "name","starting_home_id" = "id")) %>%
   rename(home_qb_id = starting_home_id,home_qb_epa_per_play = qb_epa_per_play, home_qb_games_played = games_played,
           home_qb_db_per_game = dropbacks_per_game,home_total_db = total_dbs) %>%
-  inner_join(qb_data %>% filter(dropbacks_per_game > 5),by = c("game_date" = "date","starting_away_qb" = "name","starting_away_id" = "id")) %>%
+  inner_join(qb_data %>% filter(dropbacks_per_game > 3),by = c("game_date" = "date","starting_away_qb" = "name","starting_away_id" = "id")) %>%
   rename(away_qb_id = starting_away_id,away_qb_epa_per_play = qb_epa_per_play, away_qb_games_played = games_played,
           away_qb_db_per_game = dropbacks_per_game, away_total_db = total_dbs) %>%
   inner_join(offense_data, by = c("game_date" = "date","home_team" = "posteam")) %>%
