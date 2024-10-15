@@ -12,7 +12,7 @@ plays_by_year <- data %>%
 
 
 year_comparison <- data %>%
-  filter((rush == 1 | pass == 1),week %in% c(1,2,3,4,5)) %>%
+  filter((rush == 1 | pass == 1),week %in% c(1:6)) %>%
   group_by(season) %>%
   dplyr::summarize(pass_epa = mean(epa[pass == 1],na.rm = T),
                    run_epa = mean(epa[rush == 1],na.rm = T),
@@ -31,7 +31,7 @@ ggplot(year_comparison, aes(x = season)) +
 
 
 game_scores <- data %>%
-  filter(season_type == "REG",week %in% c(1,2,3,4,5)) %>%
+  filter(season_type == "REG",week %in% c(1:6)) %>%
   group_by(season,game_id) %>%
   dplyr::summarize(home_team_score = last(total_home_score),
                    away_team_score = last(total_away_score),

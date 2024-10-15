@@ -14,7 +14,7 @@ data <- load_pbp(2022:2024) %>%
 
 
 B <- optimal_beta <- 0.9974176
-current_week <- 6
+current_week <- 7
 
 schedule <- load_schedules() %>% filter(season == 2024) %>%
   mutate(home_qb = str_c(str_sub(home_qb_name, 1, 1), ".", str_extract(home_qb_name, "[^ ]+$")),
@@ -30,8 +30,7 @@ sunday <- schedule %>%
   pull(date) %>%
   as.Date()
 
-master_qb_list <- rbind(schedule$home_qb,schedule$away_qb) %>%
-  unique()
+master_qb_list <- rbind(schedule %>% select(name = home_qb),schedule %>% select(name = away_qb)) %>% unique()
 
 offense_data <- data %>%
   filter(!is.na(posteam)) %>%
@@ -60,7 +59,7 @@ defense_data <- data %>%
   mutate(date = sunday)
 
 qb_data <- data %>%
-  filter(!is.na(qb_epa),name %in% master_qb_list) %>%
+  filter(!is.na(qb_epa),name %in% master_qb_list$name) %>%
   mutate(days_diff = as.numeric(difftime(sunday,game_date, "days"))) %>%
   group_by(id,name) %>%
   mutate(qb_success = ifelse(qb_epa > 0,1,0)) %>%
@@ -83,9 +82,10 @@ teams <- unique(schedule$home_team)
 
 matchups <- expand.grid(Home_Team = teams, Away_Team = teams)
 matchups <- matchups[matchups$Home_Team != matchups$Away_Team, ]
-current_qbs <- rbind(schedule %>% select(team = home_team,qb = home_qb,week) %>% filter(week %in% c(current_week,current_week + 1)),
-                     schedule %>% select(team = away_team,qb = away_qb,week) %>% filter(week %in% c(current_week,current_week + 1))) %>%
+current_qbs <- rbind(schedule %>% select(team = home_team,qb = home_qb,week) %>% filter(week %in% c(current_week,current_week + 1,current_week - 1)),
+                     schedule %>% select(team = away_team,qb = away_qb,week) %>% filter(week %in% c(current_week,current_week + 1,current_week -1))) %>%
   select(team,qb) %>%
+  na.omit() %>%
   unique()
 
 matchups <- left_join(matchups,current_qbs, by = c("Home_Team" = "team")) %>% rename(home_qb = qb)
