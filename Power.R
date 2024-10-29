@@ -10,11 +10,12 @@ library(purrr)
 
 
 data <- load_pbp(2022:2024) %>%
-  filter((rush == 1 | pass == 1) )
+  filter((rush == 1 | pass == 1) ) %>%
+  mutate(name = ifelse(name == "G.Minshew II","G.Minshew",name))
 
 
 B <- optimal_beta <- 0.9974176
-current_week <- 8
+current_week <- 9
 
 schedule <- load_schedules() %>% filter(season == 2024) %>%
   mutate(home_qb = str_c(str_sub(home_qb_name, 1, 1), ".", str_extract(home_qb_name, "[^ ]+$")),
@@ -83,11 +84,11 @@ teams <- unique(schedule$home_team)
 matchups <- expand.grid(Home_Team = teams, Away_Team = teams)
 matchups <- matchups[matchups$Home_Team != matchups$Away_Team, ]
 
-current_qbs <- rbind(schedule %>% select(team = home_team,qb = home_qb,week) %>% filter(week %in% c(current_week,current_week + 1)),
-                     schedule %>% select(team = away_team,qb = away_qb,week) %>% filter(week %in% c(current_week,current_week + 1))) %>%
-
-  select(team,qb) %>%
+current_qbs <- rbind(schedule %>% select(team = home_team,qb = home_qb,week) %>% filter(week %in% c(current_week,current_week + 1,current_week - 1)),
+                     schedule %>% select(team = away_team,qb = away_qb,week) %>% filter(week %in% c(current_week,current_week + 1,current_week - 1))) %>%
   na.omit() %>%
+  slice_max(order_by = week, n = 1, by = team) %>%
+  select(team,qb) %>%
   unique()
 
 matchups <- left_join(matchups,current_qbs, by = c("Home_Team" = "team")) %>% rename(home_qb = qb)
