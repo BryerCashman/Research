@@ -80,6 +80,8 @@ load("~/GitHub/Research/proj_model.RDS")
 
 teams <- unique(schedule$home_team)
 
+### Initial Ratings ####
+
 matchups <- expand.grid(Home_Team = teams, Away_Team = teams)
 matchups <- matchups[matchups$Home_Team != matchups$Away_Team, ]
 
@@ -136,7 +138,8 @@ avg_off <- data %>%
                    #plays = n()
   ) %>%
   ungroup() %>%
-  mutate(date = sunday)
+  mutate(date = sunday,
+         posteam = "avg")
 
 avg_def <- data %>%
   filter(!is.na(defteam)) %>%
@@ -148,10 +151,104 @@ avg_def <- data %>%
                    #plays = n()
   ) %>%
   ungroup() %>%
-  mutate(date = sunday)
+  mutate(date = sunday,
+         defteam = "avg")
+
+### Offense Ratings ###
 
 ratings$home_rating_avg_off <- NA
 ratings$away_rating_avg_off <- NA
 
 new_matchups <- expand.grid(Home_Team = teams, Away_Team = teams)
 new_matchups <- new_matchups[new_matchups$Home_Team != new_matchups$Away_Team, ]
+
+new_matchups <- left_join(new_matchups,current_qbs, by = c("Home_Team" = "team")) %>% dplyr::rename(home_qb = qb)
+new_matchups <- left_join(new_matchups,current_qbs, by = c("Away_Team" = "team")) %>% rename(away_qb = qb)
+
+offense_data <- rbind(offense_data,avg_off)
+defense_data <- rbind(defense_data,avg_def)
+
+for(i in 1:length(teams)){
+  curteam <- teams[i]
+  
+  w_avg_off <- new_matchups %>%
+    mutate(Home_Team = ifelse(Home_Team == curteam,"avg",Home_Team),
+           Away_Team = ifelse(Away_Team == curteam,"avg",Away_Team))
+  
+  w_avg_off <- left_join(w_avg_off,qb_data, by = c("home_qb" = "name")) %>%
+    rename(home_qb_epa_per_play = qb_epa_per_play, home_qb_games_played = games_played,
+           home_qb_db_per_game = dropbacks_per_game,home_total_db = total_dbs) %>%
+    left_join(qb_data,by = c("away_qb" = "name")) %>%
+    rename(away_qb_epa_per_play = qb_epa_per_play, away_qb_games_played = games_played,
+           away_qb_db_per_game = dropbacks_per_game, away_total_db = total_dbs) %>%
+    left_join(offense_data, by = c("Home_Team" = "posteam")) %>%
+    rename(home_epa_pp = epa_per_play,  home_run_epa_pp = run_epa_per_play,
+    ) %>%
+    left_join(offense_data, by = c("Away_Team" = "posteam")) %>%
+    rename(away_epa_pp = epa_per_play,  away_run_epa_pp = run_epa_per_play, 
+    ) %>%
+    left_join(defense_data, by = c("Home_Team" = "defteam")) %>%
+    rename(home_epa_pp_allowed = epa_per_play_allowed, home_run_epa_pp_allowed = run_epa_per_play_allowed,
+    ) %>%
+    left_join(defense_data, by = c("Away_Team" = "defteam")) %>%
+    rename(away_epa_pp_allowed = epa_per_play_allowed,  away_run_epa_pp_allowed = run_epa_per_play_allowed
+    ) 
+  
+  w_avg_off$proj_spread <- predict(proj_model,w_avg_off)
+  
+  ratings$home_rating_avg_off[ratings$team == curteam] <- mean(w_avg_off$proj_spread[w_avg_off$Home_Team == "avg"])
+  ratings$away_rating_avg_off[ratings$team == curteam] <- -mean(w_avg_off$proj_spread[w_avg_off$Away_Team == "avg"])
+  
+  rm(w_avg_off)
+}
+
+ratings$avg_off <- round((ratings$home_rating_avg_off + ratings$away_rating_avg_off)/2,1)
+ratings$immplied_offense_value <- ratings$total - ratings$avg_off
+
+### Defense Ratings ###
+
+ratings$home_rating_def_off <- NA
+ratings$away_rating_def_off <- NA
+
+new_matchups <- expand.grid(Home_Team = teams, Away_Team = teams)
+new_matchups <- new_matchups[new_matchups$Home_Team != new_matchups$Away_Team, ]
+
+new_matchups <- left_join(new_matchups,current_qbs, by = c("Home_Team" = "team")) %>% dplyr::rename(home_qb = qb)
+new_matchups <- left_join(new_matchups,current_qbs, by = c("Away_Team" = "team")) %>% rename(away_qb = qb)
+
+for(i in 1:length(teams)){
+  curteam <- teams[i]
+  
+  w_avg_off <- new_matchups %>%
+    mutate(Home_Team = ifelse(Home_Team == curteam,"avg",Home_Team),
+           Away_Team = ifelse(Away_Team == curteam,"avg",Away_Team))
+  
+  w_avg_off <- left_join(w_avg_off,qb_data, by = c("home_qb" = "name")) %>%
+    rename(home_qb_epa_per_play = qb_epa_per_play, home_qb_games_played = games_played,
+           home_qb_db_per_game = dropbacks_per_game,home_total_db = total_dbs) %>%
+    left_join(qb_data,by = c("away_qb" = "name")) %>%
+    rename(away_qb_epa_per_play = qb_epa_per_play, away_qb_games_played = games_played,
+           away_qb_db_per_game = dropbacks_per_game, away_total_db = total_dbs) %>%
+    left_join(offense_data, by = c("Home_Team" = "posteam")) %>%
+    rename(home_epa_pp = epa_per_play,  home_run_epa_pp = run_epa_per_play,
+    ) %>%
+    left_join(offense_data, by = c("Away_Team" = "posteam")) %>%
+    rename(away_epa_pp = epa_per_play,  away_run_epa_pp = run_epa_per_play, 
+    ) %>%
+    left_join(defense_data, by = c("Home_Team" = "defteam")) %>%
+    rename(home_epa_pp_allowed = epa_per_play_allowed, home_run_epa_pp_allowed = run_epa_per_play_allowed,
+    ) %>%
+    left_join(defense_data, by = c("Away_Team" = "defteam")) %>%
+    rename(away_epa_pp_allowed = epa_per_play_allowed,  away_run_epa_pp_allowed = run_epa_per_play_allowed
+    ) 
+  
+  w_avg_off$proj_spread <- predict(proj_model,w_avg_off)
+  
+  ratings$home_rating_avg_off[ratings$team == curteam] <- mean(w_avg_off$proj_spread[w_avg_off$Home_Team == "avg"])
+  ratings$away_rating_avg_off[ratings$team == curteam] <- -mean(w_avg_off$proj_spread[w_avg_off$Away_Team == "avg"])
+  
+  rm(w_avg_off)
+}
+
+ratings$avg_off <- round((ratings$home_rating_avg_off + ratings$away_rating_avg_off)/2,1)
+ratings$immplied_offense_value <- ratings$total - ratings$avg_off
