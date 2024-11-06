@@ -6,6 +6,7 @@ library(mgcv)
 library(gt)
 library(scales)
 library(purrr)
+library(lubridate)
 
 data <- load_pbp(2022:2024) %>%
   filter((rush == 1 | pass == 1) )
@@ -75,7 +76,7 @@ qb_data <- data %>%
 
 
 
-load("~/Documents/GitHub/Research/proj_model.RDS")
+load("~/GitHub/Research/proj_model.RDS")
 
 teams <- unique(schedule$home_team)
 
@@ -84,7 +85,7 @@ matchups <- matchups[matchups$Home_Team != matchups$Away_Team, ]
 
 current_qbs <- rbind(schedule %>% select(team = home_team,qb = home_qb,week) %>% filter(week %in% c(current_week,current_week + 1)),
                      schedule %>% select(team = away_team,qb = away_qb,week) %>% filter(week %in% c(current_week,current_week + 1))) %>%
-  
+  slice_max(order_by = week,n = 1,by = team) %>%
   select(team,qb) %>%
   na.omit() %>%
   unique()
