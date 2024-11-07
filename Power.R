@@ -15,7 +15,7 @@ data <- load_pbp(2022:2024) %>%
 
 
 B <- optimal_beta <- 0.9974176
-current_week <- 9
+current_week <- 10
 
 schedule <- load_schedules() %>% filter(season == 2024) %>%
   mutate(home_qb = str_c(str_sub(home_qb_name, 1, 1), ".", str_extract(home_qb_name, "[^ ]+$")),
