@@ -15,7 +15,7 @@ data <- load_pbp(2022:2024) %>%
 
 
 B <- optimal_beta <- 0.9974176
-current_week <- 10
+current_week <- 12
 
 schedule <- load_schedules() %>% filter(season == 2024) %>%
   mutate(home_qb = str_c(str_sub(home_qb_name, 1, 1), ".", str_extract(home_qb_name, "[^ ]+$")),
@@ -90,6 +90,8 @@ current_qbs <- rbind(schedule %>% select(team = home_team,qb = home_qb,week) %>%
   slice_max(order_by = week, n = 1, by = team) %>%
   select(team,qb) %>%
   unique()
+
+current_qbs <- current_qbs %>% mutate(qb = ifelse(team == "IND","A.Richardson",qb))
 
 matchups <- left_join(matchups,current_qbs, by = c("Home_Team" = "team")) %>% rename(home_qb = qb)
 matchups <- left_join(matchups,current_qbs, by = c("Away_Team" = "team")) %>% rename(away_qb = qb)

@@ -12,7 +12,7 @@ plays_by_year <- data %>%
 
 
 year_comparison <- data %>%
-  filter((rush == 1 | pass == 1),week %in% c(1:6)) %>%
+  filter((rush == 1 | pass == 1),week %in% c(1:10)) %>%
   group_by(season) %>%
   dplyr::summarize(pass_epa = mean(epa[pass == 1],na.rm = T),
                    run_epa = mean(epa[rush == 1],na.rm = T),
