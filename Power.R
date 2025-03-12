@@ -15,7 +15,7 @@ data <- load_pbp(2022:2024) %>%
 
 
 B <- optimal_beta <- 0.9974176
-current_week <- 12
+current_week <- 19
 
 schedule <- load_schedules() %>% filter(season == 2024) %>%
   mutate(home_qb = str_c(str_sub(home_qb_name, 1, 1), ".", str_extract(home_qb_name, "[^ ]+$")),
@@ -31,7 +31,7 @@ sunday <- schedule %>%
   pull(date) %>%
   as.Date()
 
-master_qb_list <- rbind(schedule %>% select(name = home_qb),schedule %>% select(name = away_qb)) %>% unique()
+master_qb_list <- rbind(schedule %>% select(name = home_qb),schedule %>% select(name = away_qb)) %>% rbind(data.frame(name = c("M.Penix","D.Ridder"))) %>% unique()
 
 offense_data <- data %>%
   filter(!is.na(posteam)) %>%
@@ -91,7 +91,7 @@ current_qbs <- rbind(schedule %>% select(team = home_team,qb = home_qb,week) %>%
   select(team,qb) %>%
   unique()
 
-current_qbs <- current_qbs %>% mutate(qb = ifelse(team == "IND","A.Richardson",qb))
+current_qbs <- current_qbs %>% mutate(qb = ifelse(team == "DAL","C.Rush",qb))
 
 matchups <- left_join(matchups,current_qbs, by = c("Home_Team" = "team")) %>% rename(home_qb = qb)
 matchups <- left_join(matchups,current_qbs, by = c("Away_Team" = "team")) %>% rename(away_qb = qb)
@@ -225,8 +225,6 @@ wordmark
 
 wordmark %>% 
   gtsave(paste0("/Users/bryer/Documents/NFL Projects/Power Ratings/wordmark",current_week,".png"))
-
-
 
 
 
