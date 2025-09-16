@@ -6,18 +6,22 @@ library(mgcv)
 library(gt)
 library(scales)
 library(purrr)
+library(here)
+
+computer <- "W"
+
+path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/proj_model.RDS","/Users/bryer/Documents/GitHub/Research/proj_model.RDS")
 
 
-
-data <- load_pbp(2022:2024) %>%
+data <- load_pbp(2023:2025) %>%
   filter((rush == 1 | pass == 1) ) %>%
   mutate(name = ifelse(name == "G.Minshew II","G.Minshew",name))
 
 
 B <- optimal_beta <- 0.9974176
-current_week <- 19
+current_week <- 3
 
-schedule <- load_schedules() %>% filter(season == 2024) %>%
+schedule <- load_schedules() %>% filter(season == 2025) %>%
   mutate(home_qb = str_c(str_sub(home_qb_name, 1, 1), ".", str_extract(home_qb_name, "[^ ]+$")),
          away_qb = str_c(str_sub(away_qb_name, 1, 1), ".", str_extract(away_qb_name, "[^ ]+$")))
 
@@ -77,7 +81,10 @@ qb_data <- data %>%
 
 
 
-load("~/Documents/GitHub/Research/proj_model.RDS")
+#load("~/Documents/GitHub/Research/proj_model.RDS")
+load(path)
+
+
 
 teams <- unique(schedule$home_team)
 
@@ -91,7 +98,7 @@ current_qbs <- rbind(schedule %>% select(team = home_team,qb = home_qb,week) %>%
   select(team,qb) %>%
   unique()
 
-current_qbs <- current_qbs %>% mutate(qb = ifelse(team == "DAL","C.Rush",qb))
+#current_qbs <- current_qbs %>% mutate(qb = ifelse(team == "DAL","C.Rush",qb))
 
 matchups <- left_join(matchups,current_qbs, by = c("Home_Team" = "team")) %>% rename(home_qb = qb)
 matchups <- left_join(matchups,current_qbs, by = c("Away_Team" = "team")) %>% rename(away_qb = qb)
@@ -278,6 +285,8 @@ logos <- df %>%
   tab_style(
     style = cell_text(size = px(30), font = "Arial", weight = "bold",align = "center"),
     locations = cells_body(columns = c(Rank,Rank2))
-  )%>% 
+  )#%>% 
   gtsave("/Users/bryer/Documents/NFL Projects/Power Ratings/logos.png")
 
+  logos
+  
