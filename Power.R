@@ -19,7 +19,7 @@ data <- load_pbp(2023:2025) %>%
 
 
 B <- optimal_beta <- 0.9974176
-current_week <- 3
+current_week <- 4
 
 schedule <- load_schedules() %>% filter(season == 2025) %>%
   mutate(home_qb = str_c(str_sub(home_qb_name, 1, 1), ".", str_extract(home_qb_name, "[^ ]+$")),
@@ -77,7 +77,7 @@ qb_data <- data %>%
   ) %>%
   ungroup() %>%
   mutate(total_dbs = dropbacks_per_game * games_played) %>%
-  filter(dropbacks_per_game > 3)
+  filter(dropbacks_per_game > 3 | name == "J.Dart")
 
 
 
@@ -98,7 +98,7 @@ current_qbs <- rbind(schedule %>% select(team = home_team,qb = home_qb,week) %>%
   select(team,qb) %>%
   unique()
 
-#current_qbs <- current_qbs %>% mutate(qb = ifelse(team == "DAL","C.Rush",qb))
+current_qbs <- current_qbs %>% mutate(qb = ifelse(team == "WAS","M.Mariota",qb))
 
 matchups <- left_join(matchups,current_qbs, by = c("Home_Team" = "team")) %>% rename(home_qb = qb)
 matchups <- left_join(matchups,current_qbs, by = c("Away_Team" = "team")) %>% rename(away_qb = qb)
