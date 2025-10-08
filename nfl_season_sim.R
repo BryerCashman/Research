@@ -5,7 +5,8 @@ library(mgcv)
 
 
 def_epa_sd <- .0861
-sigma <- read.csv("C:/Users/b.cashman/Documents/csv/NFL/cov_matrix.csv")
+
+
 
 data <- load_pbp(2023:2025) %>%
   filter((rush == 1 | pass == 1) ) %>%
@@ -16,11 +17,14 @@ schedule <- load_schedules(2025) %>%
          away_qb = str_c(str_sub(away_qb_name, 1, 1), ".", str_extract(away_qb_name, "[^ ]+$")))
 
 
-computer <- "W"
+computer <- "h"
 
 path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/proj_model.RDS","/Users/bryer/Documents/GitHub/Research/proj_model.RDS")
 load(path)
-load("C:/Users/b.cashman/Documents/R scripts/NFL/model_nfl_total.RDS")
+path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/model_nfl_home_wp.RDS","/Users/bryer/Documents/GitHub/Research/model_nfl_home_wp.RDS")
+load(path)
+path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/csv/NFL/cov_matrix.csv","/Users/bryer/Documents/cov_matrix.csv")
+sigma <- read.csv(path)
 
 
 current_week <- max(schedule$week[!is.na(schedule$home_qb_name)])
@@ -89,10 +93,28 @@ current_qbs <- rbind(schedule %>% dplyr::select(team = home_team,qb = home_qb,we
   dplyr::select(team,qb) %>%
   unique()
 
+### Injured qbs
+QB <- "L.Jackson"
+Team <- "BAL"
+week_return <- 7
+
+if(!is.na(QB)){
+games_after_return <- sum(schedule$home_team[schedule$week >= week_return] == Team) + sum(schedule$away_team[schedule$week >= week_return] == Team)
+games_before_return <- sum(schedule$home_team[schedule$week < week_return] == Team) + sum(schedule$away_team[schedule$week < week_return] == Team) - sum(!is.na(schedule$result[schedule$home_team == Team | schedule$away_team == Team]) )
+total_games <- games_after_return + games_before_return
+
+adj_qb_epa <- qb_data$qb_epa_per_play[qb_data$name == QB] * (games_after_return/total_games) + qb_data$qb_epa_per_play[qb_data$name == current_qbs$qb[current_qbs$team == Team]] * (games_before_return/total_games)
+adj_qb_dbs <- qb_data$total_dbs[qb_data$name == QB] * (games_after_return/total_games) + qb_data$total_dbs[qb_data$name == current_qbs$qb[current_qbs$team == Team]] * (games_before_return/total_games)
+}
+
 current_ratings <- current_qbs %>%
   inner_join(qb_data %>% dplyr::select(name, qb_epa_per_play, total_dbs), by = c("qb" = "name")) %>%
   inner_join(offense_data %>% dplyr::select(posteam, epa_per_play), by = c("team"="posteam")) %>%
   inner_join(defense_data %>% dplyr::select(defteam, epa_per_play_allowed), by = c("team" = "defteam"))
+
+if(!is.na(QB)){
+  current_rating$
+}
 
 
 new_cor <- mvrnorm(n = 32, mu = rep(0, 2), Sigma = sigma)
