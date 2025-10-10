@@ -17,7 +17,7 @@ schedule <- load_schedules(2025) %>%
          away_qb = str_c(str_sub(away_qb_name, 1, 1), ".", str_extract(away_qb_name, "[^ ]+$")))
 
 
-computer <- "h"
+computer <- "W"
 
 path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/proj_model.RDS","/Users/bryer/Documents/GitHub/Research/proj_model.RDS")
 load(path)
@@ -113,9 +113,16 @@ current_ratings <- current_qbs %>%
   inner_join(defense_data %>% dplyr::select(defteam, epa_per_play_allowed), by = c("team" = "defteam"))
 
 if(!is.na(QB)){
-  current_rating$
+  current_ratings$qb_epa_per_play[current_ratings$team == Team] <- adj_qb_epa
+  current_ratings$total_dbs[current_ratings$team == Team] <- adj_qb_dbs
+  
 }
 
+sim_ros <- function(runs = 100){
+  
+sim_wins <<- data.frame(team = rep(NA, runs * 32),wins = rep(NA, runs * 32))  
+  
+for(i in 1:runs){
 
 new_cor <- mvrnorm(n = 32, mu = rep(0, 2), Sigma = sigma)
 
@@ -123,3 +130,72 @@ new_ratings <- current_ratings
 new_ratings[, c("qb_epa_per_play", "epa_per_play")] <- current_ratings[, c("qb_epa_per_play", "epa_per_play")] + new_cor       
 
 new_ratings[,c("epa_per_play_allowed")] <- current_ratings[,c("epa_per_play_allowed")] + rnorm(32, sd = def_epa_sd)
+
+
+df_wins <- schedule %>%
+  dplyr::select(game_id, week, result, home_team, away_team) %>%
+  inner_join(new_ratings, by = c("home_team" = "team")) %>%
+  rename(home_epa_pp = epa_per_play, home_qb_epa_per_play = qb_epa_per_play, home_epa_pp_allowed = epa_per_play_allowed, home_total_db = total_dbs) %>%
+  inner_join(new_ratings, by = c("away_team" = "team")) %>%
+  rename(away_epa_pp = epa_per_play, away_qb_epa_per_play = qb_epa_per_play, away_epa_pp_allowed = epa_per_play_allowed, away_total_db = total_dbs)
+
+df_wins$x_point_diff <- predict(proj_model, df_wins)
+
+df_wins$home_wp <- predict(model_home_wp, df_wins, type = "response")
+
+df_wins$rand <- runif(272)
+
+df_wins$home_win <- ifelse(!is.na(df_wins$result),
+                           ifelse(df_wins$result > 0, 1, 0),
+                           ifelse(df_wins$rand < df_wins$home_wp, 1, 0))
+
+
+home_wins <- df_wins %>%
+  group_by(home_team) %>%
+  dplyr::summarize(home_wins = sum(home_win)) 
+
+away_wins <- df_wins %>%
+  group_by(away_team) %>%
+  dplyr::summarize(away_wins = sum(ifelse(result == 0, 0, 1-home_win)))
+
+
+total_wins <- inner_join(home_wins, away_wins, by = c("home_team" = "away_team")) %>%
+  mutate(total_wins = home_wins + away_wins)
+
+sim_wins$team[(i * 32 - 31):(i * 32)] <<- total_wins$home_team
+sim_wins$wins[(i * 32 - 31):(i * 32)] <<- total_wins$total_wins
+
+rm(sim_wins, new_ratings, df_wins, home_wins, away_wins, total_wins)
+
+}
+}
+
+system.time(sim_ros(1000))
+
+
+win_stats <- sim_wins %>%
+  group_by(team) %>%
+  dplyr::summarize(mean_wins = mean(wins),
+                   median_wins = median(wins))
+
+win_distribution <- sim_wins %>%
+  group_by(team) %>%
+  dplyr::summarize(wins_0 = sum(wins == 0)/(nrow(sim_wins)/32),
+                   wins_1 = sum(wins == 1)/(nrow(sim_wins)/32),
+                   wins_2 = sum(wins == 2)/(nrow(sim_wins)/32),
+                   wins_3 = sum(wins == 3)/(nrow(sim_wins)/32),
+                   wins_4 = sum(wins == 4)/(nrow(sim_wins)/32),
+                   wins_5 = sum(wins == 5)/(nrow(sim_wins)/32),
+                   wins_6 = sum(wins == 6)/(nrow(sim_wins)/32),
+                   wins_7 = sum(wins == 7)/(nrow(sim_wins)/32),
+                   wins_8 = sum(wins == 8)/(nrow(sim_wins)/32),
+                   wins_9 = sum(wins == 9)/(nrow(sim_wins)/32),
+                   wins_10 = sum(wins == 10)/(nrow(sim_wins)/32),
+                   wins_11 = sum(wins == 11)/(nrow(sim_wins)/32),
+                   wins_12 = sum(wins == 12)/(nrow(sim_wins)/32),
+                   wins_13 = sum(wins == 13)/(nrow(sim_wins)/32),
+                   wins_14 = sum(wins == 14)/(nrow(sim_wins)/32),
+                   wins_15 = sum(wins == 15)/(nrow(sim_wins)/32),
+                   wins_16 = sum(wins == 16)/(nrow(sim_wins)/32),
+                   wins_17 = sum(wins == 17)/(nrow(sim_wins)/32)
+                   )
