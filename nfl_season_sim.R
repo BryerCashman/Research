@@ -119,8 +119,9 @@ if(!is.na(QB)){
 }
 
 sim_ros <- function(runs = 100){
+
   
-sim_wins <<- data.frame(team = rep(NA, runs * 32),wins = rep(NA, runs * 32))  
+sim_wins <<- data.frame(team = rep(NA, runs * 32),wins = rep(NA, runs * 32), most_wins = rep(NA, runs * 32))  
   
 for(i in 1:runs){
 
@@ -149,6 +150,8 @@ df_wins$home_win <- ifelse(!is.na(df_wins$result),
                            ifelse(df_wins$result > 0, 1, 0),
                            ifelse(df_wins$rand < df_wins$home_wp, 1, 0))
 
+df_wins$away_win <- ifelse(df_wins$result == 0 & !is.na(df_wins$result), 0, 1 - df_wins$home_win)
+
 
 home_wins <- df_wins %>%
   group_by(home_team) %>%
@@ -156,27 +159,32 @@ home_wins <- df_wins %>%
 
 away_wins <- df_wins %>%
   group_by(away_team) %>%
-  dplyr::summarize(away_wins = sum(ifelse(result == 0, 0, 1-home_win)))
+  dplyr::summarize(away_wins = sum(away_win))
 
 
 total_wins <- inner_join(home_wins, away_wins, by = c("home_team" = "away_team")) %>%
-  mutate(total_wins = home_wins + away_wins)
+  mutate(total_wins = home_wins + away_wins,
+         max_w = max(total_wins),
+         num_tied = sum(total_wins == max_w),
+         most = if_else(total_wins == max_w, 1 / num_tied, 0)) 
 
 sim_wins$team[(i * 32 - 31):(i * 32)] <<- total_wins$home_team
 sim_wins$wins[(i * 32 - 31):(i * 32)] <<- total_wins$total_wins
+sim_wins$most_wins[(i * 32 - 31):(i * 32)] <<- total_wins$most
 
-rm(sim_wins, new_ratings, df_wins, home_wins, away_wins, total_wins)
+rm( new_ratings, df_wins, home_wins, away_wins, total_wins)
 
 }
 }
 
-system.time(sim_ros(1000))
+system.time(sim_ros(5000))
 
 
 win_stats <- sim_wins %>%
   group_by(team) %>%
   dplyr::summarize(mean_wins = mean(wins),
-                   median_wins = median(wins))
+                   median_wins = median(wins),
+                   best_record_pct = mean(most_wins))
 
 win_distribution <- sim_wins %>%
   group_by(team) %>%
