@@ -2,9 +2,12 @@ library(tidyverse)
 library(nflreadr)
 library(MASS)
 library(mgcv)
+library(nflseedR)
+library(nflreadr)
 
 
-def_epa_sd <- .0861
+
+def_epa_nflreadrdef_epa_sd <- .0861
 
 
 
@@ -26,7 +29,7 @@ schedule <- schedule %>%
   mutate(divisional_game = ifelse(home_div == away_div, 1,0),
          conference_game = ifelse(home_conf == away_conf, 1, 0))
 
-computer <- "h"
+computer <- "W"
 
 path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/proj_model.RDS","/Users/bryer/Documents/GitHub/Research/proj_model.RDS")
 load(path)
@@ -34,6 +37,9 @@ path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/mo
 load(path)
 path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/csv/NFL/cov_matrix.csv","/Users/bryer/Documents/cov_matrix.csv")
 sigma <- read.csv(path)
+path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/sim_ros_fast.R","/Users/bryer/Documents/GitHub/Research/sim_ros_fast.R")
+source(path)
+
 
 
 current_week <- max(schedule$week[!is.na(schedule$home_qb_name)])
@@ -102,10 +108,15 @@ current_qbs <- rbind(schedule %>% dplyr::select(team = home_team,qb = home_qb,we
   dplyr::select(team,qb) %>%
   unique()
 
+current_ratings <- current_qbs %>%
+  inner_join(qb_data %>% dplyr::select(name, qb_epa_per_play, total_dbs), by = c("qb" = "name")) %>%
+  inner_join(offense_data %>% dplyr::select(posteam, epa_per_play), by = c("team"="posteam")) %>%
+  inner_join(defense_data %>% dplyr::select(defteam, epa_per_play_allowed), by = c("team" = "defteam"))
+
 ### Injured qbs
-QB <- "L.Jackson"
-Team <- "BAL"
-week_return <- 7
+QB <- "J.Flacco"
+Team <- "CIN"
+week_return <- 6
 
 if(!is.na(QB)){
 games_after_return <- sum(schedule$home_team[schedule$week >= week_return] == Team) + sum(schedule$away_team[schedule$week >= week_return] == Team)
@@ -116,10 +127,7 @@ adj_qb_epa <- qb_data$qb_epa_per_play[qb_data$name == QB] * (games_after_return/
 adj_qb_dbs <- qb_data$total_dbs[qb_data$name == QB] * (games_after_return/total_games) + qb_data$total_dbs[qb_data$name == current_qbs$qb[current_qbs$team == Team]] * (games_before_return/total_games)
 }
 
-current_ratings <- current_qbs %>%
-  inner_join(qb_data %>% dplyr::select(name, qb_epa_per_play, total_dbs), by = c("qb" = "name")) %>%
-  inner_join(offense_data %>% dplyr::select(posteam, epa_per_play), by = c("team"="posteam")) %>%
-  inner_join(defense_data %>% dplyr::select(defteam, epa_per_play_allowed), by = c("team" = "defteam"))
+
 
 if(!is.na(QB)){
   current_ratings$qb_epa_per_play[current_ratings$team == Team] <- adj_qb_epa
@@ -132,11 +140,9 @@ if(!is.na(QB)){
 sim_ros <- function(runs = 100){
 
   
-sim_wins <<- data.frame(team = rep(NA, runs * 32),wins = rep(NA, runs * 32), most_wins = rep(NA, runs * 32), run = rep(NA, runs * 32),
-                        divisional_wins = rep(NA, runs * 32))  
+sim_wins <<- data.frame(team = rep(NA, runs * 32),wins = rep(NA, runs * 32), run = rep(NA, runs * 32), div_rank = rep(NA, runs * 32),
+                        conf_rank = rep(NA, runs * 32))  
 
-tiebreakers <<- data.frame(matchup = rep(NA, runs * 48),h2h_adv = rep(NA, runs * 48), run = rep(NA, runs * 48))
-  
 for(i in 1:runs){
 
 new_cor <- mvrnorm(n = 32, mu = rep(0, 2), Sigma = sigma)
@@ -148,11 +154,12 @@ new_ratings[,c("epa_per_play_allowed")] <- current_ratings[,c("epa_per_play_allo
 
 
 df_wins <- schedule %>%
-  dplyr::select(game_id, week, result, home_team, away_team, divisional_game, conference_game) %>%
+  dplyr::select(game_id, week, result, home_team, away_team, divisional_game, conference_game, game_type) %>%
   inner_join(new_ratings, by = c("home_team" = "team")) %>%
   rename(home_epa_pp = epa_per_play, home_qb_epa_per_play = qb_epa_per_play, home_epa_pp_allowed = epa_per_play_allowed, home_total_db = total_dbs) %>%
   inner_join(new_ratings, by = c("away_team" = "team")) %>%
-  rename(away_epa_pp = epa_per_play, away_qb_epa_per_play = qb_epa_per_play, away_epa_pp_allowed = epa_per_play_allowed, away_total_db = total_dbs) 
+  rename(away_epa_pp = epa_per_play, away_qb_epa_per_play = qb_epa_per_play, away_epa_pp_allowed = epa_per_play_allowed, away_total_db = total_dbs) %>%
+  mutate(sim = i)
 
 df_wins$x_point_diff <- predict(proj_model, df_wins)
 
@@ -164,62 +171,19 @@ df_wins$home_win <- ifelse(!is.na(df_wins$result),
                            ifelse(df_wins$result > 0, 1, 0),
                            ifelse(df_wins$rand < df_wins$home_wp, 1, 0))
 
-df_wins$away_win <- ifelse(df_wins$result == 0 & !is.na(df_wins$result), 0, 1 - df_wins$home_win)
+df_feed <- df_wins %>%
+  mutate(home_result = ifelse(home_win == 0, -1, home_win)) %>%
+  mutate(result = ifelse(is.na(result), home_result, result),
+         sim = 1)
 
-df_wins$divisional_win <- ifelse(df_wins$home_win == 1 & df_wins$divisional_game == 1, 1, 0)
-df_wins$adivisonal_win <- ifelse(df_wins$result == 0 & !is.na(df_wins$result) | df_wins$divisional_game == 0, 0, 1 - df_wins$divisional_win)
-
-
-
-home_wins <- df_wins %>%
-  group_by(home_team) %>%
-  dplyr::summarize(home_wins = sum(home_win),
-                   hdivwins = sum(divisional_win)) 
-
-away_wins <- df_wins %>%
-  group_by(away_team) %>%
-  dplyr::summarize(away_wins = sum(away_win),
-                   adiv_wins = sum(adivisonal_win))
+standings <- nfl_standings(df_feed, verbosity = "NONE")
 
 
-total_wins <- inner_join(home_wins, away_wins, by = c("home_team" = "away_team")) %>%
-  mutate(total_wins = home_wins + away_wins,
-         max_w = max(total_wins),
-         num_tied = sum(total_wins == max_w),
-         most = if_else(total_wins == max_w, 1 / num_tied, 0),
-         div_wins = hdivwins + adiv_wins) 
-
-df_matchups <- df_wins %>%
-  filter(divisional_game == 1) %>%
-  mutate(
-    team1 = pmin(home_team, away_team),
-    team2 = pmax(home_team, away_team),
-    winner = ifelse(home_win == 1, home_team, away_team)
-  ) %>%
-  group_by(team1, team2) %>%
-  summarize(
-    team1_wins = sum(winner == team1),
-    team2_wins = sum(winner == team2),
-    .groups = "drop"
-  ) %>%
-  mutate(
-    advantage = case_when(
-      team1_wins > team2_wins ~ team1,
-      team2_wins > team1_wins ~ team2,
-      TRUE ~ "Tie"
-    ),
-    matchup = paste0(team1,"_",team2)
-  )
-
-sim_wins$team[(i * 32 - 31):(i * 32)] <<- total_wins$home_team
-sim_wins$wins[(i * 32 - 31):(i * 32)] <<- total_wins$total_wins
-sim_wins$most_wins[(i * 32 - 31):(i * 32)] <<- total_wins$most
+sim_wins$team[(i * 32 - 31):(i * 32)] <<- standings$team
+sim_wins$wins[(i * 32 - 31):(i * 32)] <<- standings$true_wins
+sim_wins$div_rank[(i * 32 - 31):(i * 32)] <<- standings$div_rank
+sim_wins$conf_rank[(i * 32 - 31):(i * 32)] <<- standings$conf_rank
 sim_wins$run[(i * 32 - 31):(i * 32)] <<- i
-sim_wins$divisional_wins[(i * 32 - 31):(i * 32)] <<- total_wins$div_wins
-
-tiebreakers$matchup[(i * 48 - 47):(i * 48)] <<- df_matchups$matchup
-tiebreakers$h2h_adv[(i * 48 - 47):(i * 48)] <<- df_matchups$advantage
-tiebreakers$run[(i * 48 - 47):(i * 48)] <<- i
 
 
 
@@ -228,14 +192,14 @@ rm(new_ratings, df_wins, home_wins, away_wins, total_wins)
 }
 }
 
-system.time(sim_ros(100))
+#system.time(sim_ros(1000))
+system.time(sim_wins <- sim_ros_fast(2500))
 
 
 win_stats <- sim_wins %>%
   group_by(team) %>%
   dplyr::summarize(mean_wins = mean(wins),
-                   median_wins = median(wins),
-                   best_record_pct = mean(most_wins))
+                   median_wins = median(wins))
 
 win_distribution <- sim_wins %>%
   group_by(team) %>%
@@ -259,8 +223,28 @@ win_distribution <- sim_wins %>%
                    wins_17 = sum(wins == 17)/(nrow(sim_wins)/32)
                    )
 
-divisional_winners <- sim_wins %>%
+
+division_winners <- sim_wins %>%
   inner_join(teams, by = c("team" = "team_abbr")) %>%
-  group_by(run, team_division) %>%
-  mutate(max_wins = max(wins),
-         winner = ifelse(wins == max_wins, 1, 0))
+  group_by(team, team_division) %>%
+  dplyr::summarize(win_div = sum(div_rank == 1)/n(),
+                   fin_2nd = sum(div_rank == 2)/n(),
+                   fin_3rd = sum(div_rank == 3)/n(),
+                   fin_4th = sum(div_rank == 4)/n(), 
+                   make_playoffs = sum(conf_rank <= 7)/n(),
+                   miss_playoffs = 1 - make_playoffs) %>%
+  arrange(team_division, desc(win_div))
+
+best_worst <- sim_wins %>%
+  group_by(run) %>%
+  mutate(most_wins = max(wins),
+         min_wins = min(wins),
+         teams_with_most = sum(wins == most_wins),
+         teams_with_least = sum(wins == min_wins),
+         most = (wins == most_wins)/teams_with_most,
+         least = (wins == min_wins)/teams_with_least) %>%
+  ungroup() %>%
+  group_by(team) %>%
+  dplyr::summarize(most_pct = sum(most)/n(),
+                   least_pct = sum(least)/n())
+
