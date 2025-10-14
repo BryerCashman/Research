@@ -8,13 +8,13 @@ library(scales)
 library(purrr)
 library(lubridate)
 
-data <- load_pbp(2022:2024) %>%
+data <- load_pbp(2023:2025) %>%
   filter((rush == 1 | pass == 1) ) %>%
   mutate(name = ifelse(name == "G.Minshew II","G.Minshew",name))
 
 
 B <- optimal_beta <- 0.9974176
-current_week <- 12
+current_week <- 7
 
 
 schedule <- load_schedules() %>% filter(season == 2024) %>%

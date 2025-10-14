@@ -7,7 +7,7 @@ library(nflreadr)
 
 
 
-def_epa_nflreadrdef_epa_sd <- .0861
+def_epa_sd <- .0861
 
 
 
@@ -114,9 +114,9 @@ current_ratings <- current_qbs %>%
   inner_join(defense_data %>% dplyr::select(defteam, epa_per_play_allowed), by = c("team" = "defteam"))
 
 ### Injured qbs
-QB <- "J.Flacco"
-Team <- "CIN"
-week_return <- 6
+QB <- "L.Jackson"
+Team <- "BAL"
+week_return <- 7
 
 if(!is.na(QB)){
 games_after_return <- sum(schedule$home_team[schedule$week >= week_return] == Team) + sum(schedule$away_team[schedule$week >= week_return] == Team)
@@ -135,7 +135,7 @@ if(!is.na(QB)){
   
 }
 
-
+##### Loop for more
 
 sim_ros <- function(runs = 100){
 

@@ -1,6 +1,7 @@
 library(tidyverse)
 library(nflreadr)
 library(mgcv)
+library(odbc)
 
 computer <- "W"
 
@@ -283,4 +284,99 @@ save(model_home_wp, file = "C:/Users/b.cashman/Documents/R scripts/NFL/model_nfl
 
 
 #### Comparison
+home_teams <- test %>%
+  drop_na(home_wp) %>%
+  dplyr::select(game_id, team = home_team, opponent = away_team, wp = home_wp, win = home_w,game_date) %>%
+  inner_join(schedule %>% select(game_id,ml = home_moneyline))
 
+away_teams <- test %>%
+  drop_na(home_wp) %>%
+  mutate(away_wp = 1 - home_wp,
+         away_w = 1 - home_w) %>%
+  dplyr::select(game_id, team = away_team, opponent = home_team, wp = away_wp, win = away_w, game_date) %>%
+  inner_join(schedule %>% select(game_id, ml = away_moneyline))
+
+full <- rbind(home_teams, away_teams)
+
+
+get_dk_ml<- function(){
+  db_connection <- DBI::dbConnect(odbc::odbc(),
+                                  Driver="{SnowflakeDSIIDriver}",
+                                  Server="DRAFTKINGS-DRAFTKINGS.snowflakecomputing.com",
+                                  Database="DWSPORTSBOOK",
+                                  SCHEMA="TEN",
+                                  UID="b.cashman",
+                                  authenticator = 'externalbrowser',
+                                  WAREHOUSE="QUERY_WH"
+  )
+  
+  
+  query <- "with ranked as(
+select  *,
+ROW_NUMBER() over (PARTITION by  EVENTID,SELECTIONNAME  order by BETID asc) as rn_asc,
+from DWSPORTSBOOK.TEN.STOREFRONTSB_DETAILED
+where LEAGUENAME = 'NFL'
+and (MARKETNAME = 'Moneyline')
+and EVENTSTART > '2021-06-01'
+and EVENTSTART < CURRENT_TIMESTAMP
+and ISLIVE = 0
+and PLACEDDATE < EVENTSTART
+and LEGODDS > 1
+)
+SELECT * from ranked
+where (rn_asc = 1)
+"
+
+df <- dbGetQuery(db_connection, query)
+
+return(df)
+}
+
+decimal_to_american <- function(decimal_odds) {
+  if (any(decimal_odds <= 1)) {
+    stop("All decimal odds must be greater than 1")
+  }
+  
+  american_odds <- ifelse(
+    decimal_odds >= 2,
+    (decimal_odds - 1) * 100,        # positive odds
+    -100 / (decimal_odds - 1)        # negative odds
+  )
+  
+  return(round(american_odds))
+  
+  
+}
+
+mls <- get_dk_ml()
+
+mls_filtered <- mls %>%
+  dplyr::select(SELECTIONNAME, DATE, LEGODDS, EVENTNAME, EVENTSTART) %>%
+  mutate(team = sub(" .*$", "", SELECTIONNAME),
+         date = as.Date(EVENTSTART)) %>%
+  filter(SELECTIONNAME != "Unknown")
+
+mls_filtered$odds <- decimal_to_american(mls_filtered$LEGODDS)
+
+american_to_prob <- function(odds) {
+  ifelse(
+    odds > 0,
+    100 / (odds + 100),   # For positive odds
+    -odds / (-odds + 100) # For negative odds
+  )
+}
+
+mls_filtered$implied_wp <- american_to_prob(mls_filtered$odds)
+
+full$implied_wp <- american_to_prob(full$ml)
+
+df_ratios <- full %>%
+  mutate(ratio = wp/implied_wp,
+         units = ifelse(win == 1, ifelse(ml > 0, ml/100, 100/abs(ml) ), -1),
+         diff = wp - implied_wp) %>%
+  filter(game_id > "2021_08",
+         !grepl("18",game_id))
+
+
+summary(lm(units ~ ratio, data = df_ratios))
+summary(lm(units ~ diff, data = df_ratios))
