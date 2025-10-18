@@ -3,7 +3,7 @@ library(nflreadr)
 library(mgcv)
 library(odbc)
 
-computer <- "W"
+computer <- "h"
 
 path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/proj_model.RDS","/Users/bryer/Documents/GitHub/Research/proj_model.RDS")
 
@@ -369,6 +369,9 @@ american_to_prob <- function(odds) {
 mls_filtered$implied_wp <- american_to_prob(mls_filtered$odds)
 
 full$implied_wp <- american_to_prob(full$ml)
+Metrics::logLoss(full$win, full$wp)
+Metrics::logLoss(full$win, full$implied_wp)
+
 
 df_ratios <- full %>%
   mutate(ratio = wp/implied_wp,
@@ -380,3 +383,8 @@ df_ratios <- full %>%
 
 summary(lm(units ~ ratio, data = df_ratios))
 summary(lm(units ~ diff, data = df_ratios))
+
+groups <- df_ratios %>%
+  dplyr::summarize(greater_1.2 = sum(units[ratio > 1.2]),
+                   greater_1 = sum(units[ratio > 1]),
+                   greater_1.4 = sum(units[ratio > 1.4]))

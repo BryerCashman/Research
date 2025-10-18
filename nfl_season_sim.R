@@ -29,7 +29,7 @@ schedule <- schedule %>%
   mutate(divisional_game = ifelse(home_div == away_div, 1,0),
          conference_game = ifelse(home_conf == away_conf, 1, 0))
 
-computer <- "W"
+computer <- "h"
 
 path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/proj_model.RDS","/Users/bryer/Documents/GitHub/Research/proj_model.RDS")
 load(path)
@@ -193,7 +193,7 @@ rm(new_ratings, df_wins, home_wins, away_wins, total_wins)
 }
 
 #system.time(sim_ros(1000))
-system.time(sim_wins <- sim_ros_fast(2500))
+system.time(sim_wins <- sim_ros_fast(5000))
 
 
 win_stats <- sim_wins %>%
