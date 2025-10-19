@@ -10,9 +10,13 @@ library(data.table)
 library(profvis)
 library(stringr)
 options(dplyr.summarise.inform = FALSE)
-
 addTaskCallback(function(...) {set.seed(123); TRUE}) 
-load( file = "/Users/bryer/Documents/GitHub/model_pred_qba.R")
+
+
+computer <- "W"
+
+path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/model_pred_qb_epa.RDS","/Users/bryer/Documents/GitHub/Research/model_pred_qb_epa.RDS")
+load( file = path)
 
 convert_name <- function(name) {
   # Extract first name initial
@@ -83,6 +87,12 @@ games <- sched %>%
          starting_away_qb = away_qb,starting_away_id = away_qb_id) %>%
   mutate(game_date = as.Date(game_date))
 
+optimize_spread <- function(bases){
+
+base_off <- bases[1]
+base_def <- bases[2]
+base_qb <- bases[3]
+  
 offense_1921 <- data %>%
   filter(season %in% c(2019, 2020, 2021),
          (pass == 1 | rush == 1),
@@ -95,13 +105,15 @@ offense_1921 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base),
-    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base),
+    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_off),
+    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base_off),
+    ewm_proe = ifelse(!is.na(pass_oe),ewm_irregular_lagged(pass_oe[!is.na(pass_oe)], days_gap[!is.na(pass_oe)], base_off),NA)
   ) %>%
   ungroup() %>%
   group_by(season, posteam, game_id, game_date) %>%
   summarize(epa_pp = first(ewm_epa_play),
             sr = first(ewm_success_rate),
+            proe = dplyr::first(ewm_proe, na_rm = T),
             .groups = "drop") %>%
   filter(season != 2019)
 
@@ -117,13 +129,15 @@ offense_2022 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base),
-    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base),
+    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_off),
+    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base_off),
+    ewm_proe = ifelse(!is.na(pass_oe),ewm_irregular_lagged(pass_oe[!is.na(pass_oe)], days_gap[!is.na(pass_oe)], base_off),NA)
   ) %>%
   ungroup() %>%
   group_by(season, posteam, game_id, game_date) %>%
   summarize(epa_pp = first(ewm_epa_play),
             sr = first(ewm_success_rate),
+            proe = dplyr::first(ewm_proe, na_rm = T),
             .groups = "drop") %>%
   filter(season == 2022)
 
@@ -139,13 +153,15 @@ offense_2123 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base),
-    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base),
+    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_off),
+    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base_off),
+    ewm_proe = ifelse(!is.na(pass_oe),ewm_irregular_lagged(pass_oe[!is.na(pass_oe)], days_gap[!is.na(pass_oe)], base_off),NA)
   ) %>%
   ungroup() %>%
   group_by(season, posteam, game_id, game_date) %>%
   summarize(epa_pp = first(ewm_epa_play),
             sr = first(ewm_success_rate),
+            proe = dplyr::first(ewm_proe, na_rm = T),
             .groups = "drop") %>%
   filter(season == 2023)
 
@@ -161,13 +177,15 @@ offense_2224 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base),
-    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base),
+    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_off),
+    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base_off),
+    ewm_proe = ifelse(!is.na(pass_oe),ewm_irregular_lagged(pass_oe[!is.na(pass_oe)], days_gap[!is.na(pass_oe)], base_off),NA)
   ) %>%
   ungroup() %>%
   group_by(season, posteam, game_id, game_date) %>%
   summarize(epa_pp = first(ewm_epa_play),
             sr = first(ewm_success_rate),
+            proe = dplyr::first(ewm_proe, na_rm = T),
             .groups = "drop") %>%
   filter(season == 2024)
 
@@ -183,13 +201,15 @@ offense_2325 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base),
-    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base),
+    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_off),
+    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base_off),
+    ewm_proe = ifelse(!is.na(pass_oe),ewm_irregular_lagged(pass_oe[!is.na(pass_oe)], days_gap[!is.na(pass_oe)], base_off),NA)
   ) %>%
   ungroup() %>%
   group_by(season, posteam, game_id, game_date) %>%
   summarize(epa_pp = first(ewm_epa_play),
             sr = first(ewm_success_rate),
+            proe = dplyr::first(ewm_proe, na_rm = T),
             .groups = "drop") %>%
   filter(season == 2025)
    
@@ -208,8 +228,8 @@ defense1921 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base),
-    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base),
+    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_def),
+    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base_def),
   ) %>%
   ungroup() %>%
   group_by(season, defteam, game_id, game_date) %>%
@@ -230,8 +250,8 @@ defense2022 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base),
-    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base),
+    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_def),
+    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base_def),
   ) %>%
   ungroup() %>%
   group_by(season, defteam, game_id, game_date) %>%
@@ -252,8 +272,8 @@ defense2123 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base),
-    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base),
+    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_def),
+    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base_def),
   ) %>%
   ungroup() %>%
   group_by(season, defteam, game_id, game_date) %>%
@@ -274,8 +294,8 @@ defense2224 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base),
-    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base),
+    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_def),
+    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base_def),
   ) %>%
   ungroup() %>%
   group_by(season, defteam, game_id, game_date) %>%
@@ -296,8 +316,8 @@ defense2325 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base),
-    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base),
+    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_def),
+    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base_def),
   ) %>%
   ungroup() %>%
   group_by(season, defteam, game_id, game_date) %>%
@@ -323,10 +343,10 @@ qb_data1921 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     # EWM of qb_epa known *before* this play
-    ewm_qb_epa_play = ewm_irregular_lagged(qb_epa, days_gap, base),
+    ewm_qb_epa_play = ewm_irregular_lagged(qb_epa, days_gap, base_qb),
     dbs = lag(cumsum(!is.na(epa))),
-    ewm_qb_sack_rate = ifelse(qb_dropback == 1, ewm_irregular_lagged(qb_epa[qb_dropback == 1], days_gap[qb_dropback == 1], base), NA),
-    ewm_air_epa = ifelse(play_type == "pass", ewm_irregular_lagged(qb_epa[play_type == "pass"], days_gap[play_type == "pass"], base), NA),
+    ewm_qb_sack_rate = ifelse(qb_dropback == 1, ewm_irregular_lagged(qb_epa[qb_dropback == 1], days_gap[qb_dropback == 1], base_qb), NA),
+    ewm_air_epa = ifelse(play_type == "pass", ewm_irregular_lagged(qb_epa[play_type == "pass"], days_gap[play_type == "pass"], base_qb), NA),
     pred_qb_epa = predict(model_pred_qb_epa, pick(ewm_qb_epa_play, dbs))
   ) %>%
   ungroup() %>%
@@ -354,10 +374,10 @@ qb_data2022 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     # EWM of qb_epa known *before* this play
-    ewm_qb_epa_play = ewm_irregular_lagged(qb_epa, days_gap, base),
+    ewm_qb_epa_play = ewm_irregular_lagged(qb_epa, days_gap, base_qb),
     dbs = lag(cumsum(!is.na(epa))),
-    ewm_qb_sack_rate = ifelse(qb_dropback == 1, ewm_irregular_lagged(qb_epa[qb_dropback == 1], days_gap[qb_dropback == 1], base), NA),
-    ewm_air_epa = ifelse(play_type == "pass", ewm_irregular_lagged(qb_epa[play_type == "pass"], days_gap[play_type == "pass"], base), NA),
+    ewm_qb_sack_rate = ifelse(qb_dropback == 1, ewm_irregular_lagged(qb_epa[qb_dropback == 1], days_gap[qb_dropback == 1], base_qb), NA),
+    ewm_air_epa = ifelse(play_type == "pass", ewm_irregular_lagged(qb_epa[play_type == "pass"], days_gap[play_type == "pass"], base_qb), NA),
     pred_qb_epa = predict(model_pred_qb_epa, pick(ewm_qb_epa_play, dbs))
   ) %>%
   ungroup() %>%
@@ -385,10 +405,10 @@ qb_data2123 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     # EWM of qb_epa known *before* this play
-    ewm_qb_epa_play = ewm_irregular_lagged(qb_epa, days_gap, base),
+    ewm_qb_epa_play = ewm_irregular_lagged(qb_epa, days_gap, base_qb),
     dbs = lag(cumsum(!is.na(epa))),
-    ewm_qb_sack_rate = ifelse(qb_dropback == 1, ewm_irregular_lagged(qb_epa[qb_dropback == 1], days_gap[qb_dropback == 1], base), NA),
-    ewm_air_epa = ifelse(play_type == "pass", ewm_irregular_lagged(qb_epa[play_type == "pass"], days_gap[play_type == "pass"], base), NA),
+    ewm_qb_sack_rate = ifelse(qb_dropback == 1, ewm_irregular_lagged(qb_epa[qb_dropback == 1], days_gap[qb_dropback == 1], base_qb), NA),
+    ewm_air_epa = ifelse(play_type == "pass", ewm_irregular_lagged(qb_epa[play_type == "pass"], days_gap[play_type == "pass"], base_qb), NA),
     pred_qb_epa = predict(model_pred_qb_epa, pick(ewm_qb_epa_play, dbs))
   ) %>%
   ungroup() %>%
@@ -416,10 +436,10 @@ qb_data2224 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     # EWM of qb_epa known *before* this play
-    ewm_qb_epa_play = ewm_irregular_lagged(qb_epa, days_gap, base),
+    ewm_qb_epa_play = ewm_irregular_lagged(qb_epa, days_gap, base_qb),
     dbs = lag(cumsum(!is.na(epa))),
-    ewm_qb_sack_rate = ifelse(qb_dropback == 1, ewm_irregular_lagged(qb_epa[qb_dropback == 1], days_gap[qb_dropback == 1], base), NA),
-    ewm_air_epa = ifelse(play_type == "pass", ewm_irregular_lagged(qb_epa[play_type == "pass"], days_gap[play_type == "pass"], base), NA),
+    ewm_qb_sack_rate = ifelse(qb_dropback == 1, ewm_irregular_lagged(qb_epa[qb_dropback == 1], days_gap[qb_dropback == 1], base_qb), NA),
+    ewm_air_epa = ifelse(play_type == "pass", ewm_irregular_lagged(qb_epa[play_type == "pass"], days_gap[play_type == "pass"], base_qb), NA),
     pred_qb_epa = predict(model_pred_qb_epa, pick(ewm_qb_epa_play, dbs))
   ) %>%
   ungroup() %>%
@@ -447,10 +467,10 @@ qb_data2325 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     # EWM of qb_epa known *before* this play
-    ewm_qb_epa_play = ewm_irregular_lagged(qb_epa, days_gap, base),
+    ewm_qb_epa_play = ewm_irregular_lagged(qb_epa, days_gap, base_qb),
     dbs = lag(cumsum(!is.na(epa))),
-    ewm_qb_sack_rate = ifelse(qb_dropback == 1, ewm_irregular_lagged(qb_epa[qb_dropback == 1], days_gap[qb_dropback == 1], base), NA),
-    ewm_air_epa = ifelse(play_type == "pass", ewm_irregular_lagged(qb_epa[play_type == "pass"], days_gap[play_type == "pass"], base), NA),
+    ewm_qb_sack_rate = ifelse(qb_dropback == 1, ewm_irregular_lagged(qb_epa[qb_dropback == 1], days_gap[qb_dropback == 1], base_qb), NA),
+    ewm_air_epa = ifelse(play_type == "pass", ewm_irregular_lagged(qb_epa[play_type == "pass"], days_gap[play_type == "pass"], base_qb), NA),
     pred_qb_epa = predict(model_pred_qb_epa, pick(ewm_qb_epa_play, dbs))
   ) %>%
   ungroup() %>%
@@ -472,15 +492,15 @@ rm(qb_data1921, qb_data2022, qb_data2123, qb_data2224, qb_data2325)
   
 df <- inner_join(games,qb_data, by = c("game_date" ,"game_id","starting_home_id" = "id")) %>%
     rename(home_qb_id = starting_home_id,home_qb_epa_per_play = qb_epa, 
-           home_total_db = dbs, home_sack_rate = qb_sack_rate, home_qb_air_epa = qb_air_epa) %>%
+           home_total_db = dbs, home_sack_rate = qb_sack_rate, home_qb_air_epa = qb_air_epa, home_qb_pred_epa = pred_qb_epa) %>%
     inner_join(qb_data ,by = c("game_date","game_id","starting_away_id" = "id")) %>%
   rename(away_qb_id = starting_away_id,away_qb_epa_per_play = qb_epa, 
-         away_total_db = dbs, away_sack_rate = qb_sack_rate, away_qb_air_epa = qb_air_epa) %>%
+         away_total_db = dbs, away_sack_rate = qb_sack_rate, away_qb_air_epa = qb_air_epa, , away_qb_pred_epa = pred_qb_epa) %>%
     inner_join(offense_data, by = c("game_date" ,"game_id","home_team" = "posteam")) %>%
-    rename(home_epa_pp = epa_pp,  home_sr = sr
+    rename(home_epa_pp = epa_pp,  home_sr = sr, home_proe = proe
     ) %>%
     inner_join(offense_data, by = c("game_date","game_id","away_team" = "posteam")) %>%
-    rename(away_epa_pp = epa_pp,  away_sr = sr
+    rename(away_epa_pp = epa_pp,  away_sr = sr, away_proe = proe
     ) %>%
     inner_join(defense_data, by = c("game_date","game_id","home_team" = "defteam")) %>%
     rename(home_epa_pp_allowed = epa_pp_allowed, home_sr_allowed = sr_allowed
@@ -489,11 +509,11 @@ df <- inner_join(games,qb_data, by = c("game_date" ,"game_id","starting_home_id"
     rename(away_epa_pp_allowed = epa_pp_allowed,  away_sr_allowed = sr_allowed
     ) %>%
     arrange(desc(game_date)) %>%
-    na.omit()
+  drop_na(home_epa_pp)
   
   rm(offense_data,defense_data,qb_data)
   
-  print(paste0("Ending trial at ",Sys.time()))
+
 
 
 # cl <- makeCluster(detectCores() - 1)  # Use all but one core
@@ -504,24 +524,33 @@ df <- inner_join(games,qb_data, by = c("game_date" ,"game_id","starting_home_id"
 
   dt <- sample(nrow(df), 0.75*nrow(df))
   df_train <- df[dt,]
-  df_test <- df[-dt,]
+  df_test <- df[-dt,] %>% na.omit()
   
-  model <- mgcv::gam(point_diff ~ s(home_epa_pp,away_epa_pp_allowed) + s(away_epa_pp,home_epa_pp_allowed) 
-                     + s(home_qb_epa_per_play,home_total_db) + s(away_qb_epa_per_play,away_total_db),data = df_train)
+  # model <- mgcv::gam(point_diff ~ s(home_epa_pp,away_epa_pp_allowed) + s(away_epa_pp,home_epa_pp_allowed) 
+  #                    + home_qb_pred_epa + away_qb_pred_epa,data = df_train)
+  # 
+  # modelt <- mgcv::gam(point_diff ~ s(home_sr,away_sr_allowed) + s(away_sr,home_sr_allowed) 
+  #                                + home_qb_pred_epa + away_qb_pred_epa, data = df_train)
+  # summary(model)
   
-  model_glm <- glm(point_diff ~ home_epa_pp + away_epa_pp_allowed + away_epa_pp + home_epa_pp_allowed + 
-                   home_qb_epa_per_play + home_total_db + away_qb_epa_per_play + away_total_db, data = df_train)
+  model_glm <- mgcv::gam(point_diff ~ home_epa_pp + away_epa_pp_allowed + away_epa_pp + home_epa_pp_allowed 
+                     + s(home_qb_pred_epa, home_proe) + s(away_qb_pred_epa, away_proe) , data = df_train)
   
-  summary(model_glm)
+  #summary(model_glm)
   
-  df_test$proj_spread <- predict(model, df_test)
-  
-  cor(df_test$proj_spread,df_test$point_diff) ^ 2
+  # model_test <- mgcv::gam(point_diff ~ home_proe + away_proe, data = df_train)
+  # summary(model_test)
+  # 
+   df_test$proj_spread <- predict(model_glm, df_test)
+  # 
+  # cor(df_test$proj_spread,df_test$point_diff) ^ 2
 
-  Metrics::rmse(df_test$point_diff, df_test$proj_spread)
+rmse <- Metrics::rmse(df_test$point_diff, df_test$proj_spread)
   
-  print(paste0("rsq function ending at ",Sys.time(), "with a value of ",r2))
-
+  print(paste0("rmse function ending at ",Sys.time(), "with a value of ",rmse))
+  
+  return(rmse)
+}
 
 grid <- expand.grid(home_epa_pp =  c(-300:200)/1000, away_epa_pp_allowed = c(-250:150)/1000, away_epa_pp = c(0),
                                      home_epa_pp_allowed = c(0), home_qb_epa_per_play = c(0), home_total_db = c(500),
@@ -573,15 +602,54 @@ ggplot(grid, aes(home_epa_pp, away_epa_pp_allowed, color = proj_spread)) +
 # cor(df_test$point_diff,df_test$proj_spread) ^ 2
 # 
 
-lower_bound <- .850
-upper_bound <- .999
+library(parallel)
+library(DEoptim)
 
-result <- DEoptim(
-  fn = maximize_r_squared, 
-  lower = lower_bound, 
-  upper = upper_bound,
-  control = list(trace = TRUE, NP = 10, itermax = 5)
+# make cluster
+cl <- makeCluster(detectCores() - 1, type = "PSOCK")
+
+# load packages on workers
+clusterEvalQ(cl, {
+  library(data.table)
+  library(mgcv)
+  library(Metrics)
+  library(dplyr)
+  library(tidyverse)
+  NULL
+})
+
+# export functions/objects used inside optimize_spread()
+clusterExport(
+  cl,
+  c(
+    "optimize_spread",
+    # data + helpers the function touches:
+    "data", "games", "master_id_list",
+    "ewm_irregular_lagged", "model_pred_qb_epa"
+    # add any others referenced inside optimize_spread()
+  ),
+  envir = environment()
 )
+
+# (optional) reproducible RNG across workers
+parallel::clusterSetRNGStream(cl, 123)
+
+# run DEoptim in cluster mode
+ctrl <- DEoptim.control(
+  steptol = 5, itermax = 20, trace = TRUE,
+  parallelType = 2,    # use the PSOCK cluster you pass
+  cluster = cl
+)
+
+set.seed(1)
+result <- DEoptim(
+  fn    = optimize_spread,
+  lower = c(.9,.9,.9),
+  upper = c(.999,.999,.999),
+  control = ctrl
+)
+
+stopCluster(cl)
 
 
 

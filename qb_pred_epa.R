@@ -133,4 +133,4 @@ ggplot(grid, aes(dbs, ewm_qb_epa_play, color = gam)) +
 
 model_pred_qb_epa <- m
 
-save(model_pred_qb_epa, file = "/Users/bryer/Documents/GitHub/model_pred_qba.R")
+save(model_pred_qb_epa, file = "C:/Users/b.cashman/Documents/GitHub/Research/model_pred_qb_epa.RDS")
