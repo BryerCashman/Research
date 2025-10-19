@@ -14,7 +14,7 @@ set.seed(123)
 # ===============================================
 # Load and Prepare Data
 # ===============================================
-computer <- "W"
+computer <- "h"
 path <- ifelse(computer == "W",
                "C:/Users/b.cashman/Documents/GitHub/Research/model_pred_qb_epa.RDS",
                "/Users/bryer/Documents/GitHub/Research/model_pred_qb_epa.RDS")

@@ -10,10 +10,9 @@ library(data.table)
 library(profvis)
 library(stringr)
 options(dplyr.summarise.inform = FALSE)
-addTaskCallback(function(...) {set.seed(123); TRUE}) 
 
 
-computer <- "W"
+computer <- "h"
 
 path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/model_pred_qb_epa.RDS","/Users/bryer/Documents/GitHub/Research/model_pred_qb_epa.RDS")
 load( file = path)
@@ -606,39 +605,11 @@ library(parallel)
 library(DEoptim)
 
 # make cluster
-cl <- makeCluster(detectCores() - 1, type = "PSOCK")
 
-# load packages on workers
-clusterEvalQ(cl, {
-  library(data.table)
-  library(mgcv)
-  library(Metrics)
-  library(dplyr)
-  library(tidyverse)
-  NULL
-})
-
-# export functions/objects used inside optimize_spread()
-clusterExport(
-  cl,
-  c(
-    "optimize_spread",
-    # data + helpers the function touches:
-    "data", "games", "master_id_list",
-    "ewm_irregular_lagged", "model_pred_qb_epa"
-    # add any others referenced inside optimize_spread()
-  ),
-  envir = environment()
-)
-
-# (optional) reproducible RNG across workers
-parallel::clusterSetRNGStream(cl, 123)
 
 # run DEoptim in cluster mode
 ctrl <- DEoptim.control(
-  steptol = 5, itermax = 20, trace = TRUE,
-  parallelType = 2,    # use the PSOCK cluster you pass
-  cluster = cl
+  steptol = 5, itermax = 20, trace = TRUE, NP = 30
 )
 
 set.seed(1)
@@ -659,4 +630,5 @@ result
 
 optimal_beta <- result$optim$bestmem
 
+betas <- c(0.99141, 0.95936, 0.92907)
 
