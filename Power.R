@@ -10,8 +10,16 @@ library(here)
 
 computer <- "W"
 
-path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/proj_model.RDS","/Users/bryer/Documents/GitHub/Research/proj_model.RDS")
+#path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/proj_model.RDS","/Users/bryer/Documents/GitHub/Research/proj_model.RDS")
+path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/proj_model_new.RDS","/Users/bryer/Documents/GitHub/Research/proj_model_new.RDS")
+load(path)
+path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/model_pred_qb_epa.RDS","/Users/bryer/Documents/GitHub/Research/model_pred_qb_epa.RDS")
+load( file = path)
 
+betas <- c(0.99141, 0.95936, 0.92907)
+base_off <- betas[1]
+base_def <- betas[2]
+base_qb <- betas[3]
 
 data <- load_pbp(2023:2025) %>%
   filter((rush == 1 | pass == 1) ) %>%
@@ -19,7 +27,7 @@ data <- load_pbp(2023:2025) %>%
 
 
 B <- optimal_beta <- 0.9974176
-current_week <- 7
+current_week <- 8
 
 schedule <- load_schedules() %>% filter(season == 2025) %>%
   mutate(home_qb = str_c(str_sub(home_qb_name, 1, 1), ".", str_extract(home_qb_name, "[^ ]+$")),
@@ -35,17 +43,18 @@ sunday <- schedule %>%
   pull(date) %>%
   as.Date()
 
-master_qb_list <- rbind(schedule %>% select(name = home_qb),schedule %>% select(name = away_qb)) %>% rbind(data.frame(name = c("M.Penix","D.Ridder"))) %>% unique()
+master_qb_list <- rbind(schedule %>% select(name = home_qb),schedule %>% select(name = away_qb))  %>% unique()
 
 offense_data <- data %>%
   filter(!is.na(posteam)) %>%
   mutate(days_diff = as.numeric(difftime(sunday,game_date, "days"))) %>%
   group_by(posteam) %>%
-  dplyr::summarize(epa_per_play = sum(epa * B^days_diff, na.rm = T)/sum(B^days_diff, na.rm = T),
+  dplyr::summarize(epa_per_play = sum(epa * base_off^days_diff, na.rm = T)/sum(base_off^days_diff, na.rm = T),
                    #pass_epa_per_play = mean((epa[pass == 1] * B^days_diff)/B^days_diff,na.rm = T),
-                   run_epa_per_play = sum((epa * B^days_diff)[rush==1], na.rm = T)/sum(B^days_diff[rush == 1], na.rm = T),
+                   run_epa_per_play = sum((epa * base_off^days_diff)[rush==1], na.rm = T)/sum(base_off^days_diff[rush == 1], na.rm = T),
                    #success_rate = mean((success * B^days_diff)/B^days_diff,na.rm = T),
-                   #plays = n()
+                   #plays = n(), 
+                   proe = sum(pass_oe * base_off^days_diff, na.rm = T)/sum(base_off^days_diff, na.rm = T)
   ) %>%
   ungroup() %>%
   mutate(date = sunday)
@@ -54,9 +63,9 @@ defense_data <- data %>%
   filter(!is.na(defteam)) %>%
   mutate(days_diff = as.numeric(difftime(sunday,game_date, "days"))) %>%
   group_by(defteam) %>%
-  dplyr::summarize(epa_per_play_allowed =  sum(epa * B^days_diff, na.rm = T)/sum(B^days_diff, na.rm = T),
+  dplyr::summarize(epa_per_play_allowed =  sum(epa * base_def^days_diff, na.rm = T)/sum(base_def^days_diff, na.rm = T),
                    #pass_epa_per_play_allowed = mean((epa[pass == 1] * B^days_diff)/B^days_diff,na.rm = T),
-                   run_epa_per_play_allowed = sum((epa * B^days_diff)[rush==1], na.rm = T)/sum(B^days_diff[rush == 1], na.rm = T),
+                   run_epa_per_play_allowed = sum((epa * base_def^days_diff)[rush==1], na.rm = T)/sum(base_def^days_diff[rush == 1], na.rm = T),
                    #success_rate_allowed = mean((success * B^days_diff)/B^days_diff,na.rm = T),
                    #plays = n()
   ) %>%
@@ -68,7 +77,7 @@ qb_data <- data %>%
   mutate(days_diff = as.numeric(difftime(sunday,game_date, "days"))) %>%
   group_by(id,name) %>%
   mutate(qb_success = ifelse(qb_epa > 0,1,0)) %>%
-  dplyr::summarize(qb_epa_per_play = sum((qb_epa * B^days_diff), na.rm = T)/sum(B^days_diff, na.rm = T),
+  dplyr::summarize(qb_epa_per_play = sum((qb_epa * base_qb^days_diff), na.rm = T)/sum(base_qb^days_diff, na.rm = T),
                    #qb_total_epa_two_year = sum((qb_epa *B^days_diff)/B^days_diff ,na.rm = T),
                    games_played = length(unique(game_id)),
                    #qb_epa_per_game = qb_total_epa_two_year/games_played,
@@ -76,13 +85,16 @@ qb_data <- data %>%
                    dropbacks_per_game = sum(qb_dropback,na.rm = T)/games_played
   ) %>%
   ungroup() %>%
-  mutate(total_dbs = dropbacks_per_game * games_played) %>%
-  filter(dropbacks_per_game > 3 | name == "J.Dart")
+  mutate(total_dbs = dropbacks_per_game * games_played,
+         ewm_qb_epa_play = qb_epa_per_play,
+         dbs = total_dbs,
+         qb_pred_epa = predict(model_pred_qb_epa, pick(ewm_qb_epa_play, dbs))) %>%
+  filter(dropbacks_per_game > 3 ) %>%
+  select(-ewm_qb_epa_play, -total_dbs)
 
 
 
 #load("~/Documents/GitHub/Research/proj_model.RDS")
-load(path)
 
 
 
@@ -98,22 +110,22 @@ current_qbs <- rbind(schedule %>% select(team = home_team,qb = home_qb,week) %>%
   select(team,qb) %>%
   unique()
 
-current_qbs <- current_qbs %>% mutate(qb = ifelse(team == "CIN","J.Flacco",qb))
+current_qbs <- current_qbs %>% mutate(qb = ifelse(team == "BAL","L.Jackson",qb))
 
 matchups <- left_join(matchups,current_qbs, by = c("Home_Team" = "team")) %>% rename(home_qb = qb)
 matchups <- left_join(matchups,current_qbs, by = c("Away_Team" = "team")) %>% rename(away_qb = qb)
 
 matchups <- left_join(matchups,qb_data, by = c("home_qb" = "name")) %>%
   rename(home_qb_epa_per_play = qb_epa_per_play, home_qb_games_played = games_played,
-         home_qb_db_per_game = dropbacks_per_game,home_total_db = total_dbs) %>%
+         home_qb_db_per_game = dropbacks_per_game,home_total_db = dbs, home_qb_pred_epa = qb_pred_epa) %>%
   left_join(qb_data,by = c("away_qb" = "name")) %>%
   rename(away_qb_epa_per_play = qb_epa_per_play, away_qb_games_played = games_played,
-         away_qb_db_per_game = dropbacks_per_game, away_total_db = total_dbs) %>%
+         away_qb_db_per_game = dropbacks_per_game, away_total_db = dbs, away_qb_pred_epa = qb_pred_epa) %>%
   left_join(offense_data, by = c("Home_Team" = "posteam")) %>%
-  rename(home_epa_pp = epa_per_play,  home_run_epa_pp = run_epa_per_play,
+  rename(home_epa_pp = epa_per_play,  home_run_epa_pp = run_epa_per_play, home_proe = proe
   ) %>%
   left_join(offense_data, by = c("Away_Team" = "posteam")) %>%
-  rename(away_epa_pp = epa_per_play,  away_run_epa_pp = run_epa_per_play, 
+  rename(away_epa_pp = epa_per_play,  away_run_epa_pp = run_epa_per_play, away_proe = proe
   ) %>%
   left_join(defense_data, by = c("Home_Team" = "defteam")) %>%
   rename(home_epa_pp_allowed = epa_per_play_allowed, home_run_epa_pp_allowed = run_epa_per_play_allowed,
@@ -122,7 +134,7 @@ matchups <- left_join(matchups,qb_data, by = c("home_qb" = "name")) %>%
   rename(away_epa_pp_allowed = epa_per_play_allowed,  away_run_epa_pp_allowed = run_epa_per_play_allowed
   ) 
 
-matchups$proj_spread <- predict(proj_model,matchups)
+matchups$proj_spread <- predict(model_proj_spread2,matchups)
 
 ratings <- data.frame(team = teams,home_rating = c(NA),away_rating = c(NA))
 

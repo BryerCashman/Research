@@ -11,8 +11,13 @@ library(profvis)
 library(stringr)
 options(dplyr.summarise.inform = FALSE)
 
+betas <- c(0.99141, 0.95936, 0.92907)
+base_off <- betas[1]
+base_def <- betas[2]
+base_qb <- betas[3]
 
-computer <- "h"
+
+computer <- "W"
 
 path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/model_pred_qb_epa.RDS","/Users/bryer/Documents/GitHub/Research/model_pred_qb_epa.RDS")
 load( file = path)
@@ -50,7 +55,6 @@ ewm_irregular_lagged <- function(x, days_gap, base) {
   out
 }
 
-base <- 1
 
 data <- load_pbp(2019:2025) %>%
   filter(season_type == "REG",(rush == 1 | pass == 1) )
@@ -609,7 +613,9 @@ library(DEoptim)
 
 # run DEoptim in cluster mode
 ctrl <- DEoptim.control(
-  steptol = 5, itermax = 20, trace = TRUE, NP = 30
+  steptol = 5, itermax = 20, trace = TRUE, NP = 30, parallelType = 1,
+  packages = c("tidyverse","mgcv","stringr"),
+  parVar = c("model_pred_qb_epa","master_id_list")
 )
 
 set.seed(1)
@@ -630,5 +636,6 @@ result
 
 optimal_beta <- result$optim$bestmem
 
-betas <- c(0.99141, 0.95936, 0.92907)
+model_proj_spread2 <- model_glm
 
+save(model_proj_spread2, file = "C:/Users/b.cashman/Documents/GitHub/Research/proj_model_new.RDS")

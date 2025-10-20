@@ -8,13 +8,14 @@ library(mgcv)
 library(DEoptim)
 library(Metrics)
 library(parallel)
+library(nflreadr)
 options(dplyr.summarise.inform = FALSE)
 set.seed(123)
 
 # ===============================================
 # Load and Prepare Data
 # ===============================================
-computer <- "h"
+computer <- "W"
 path <- ifelse(computer == "W",
                "C:/Users/b.cashman/Documents/GitHub/Research/model_pred_qb_epa.RDS",
                "/Users/bryer/Documents/GitHub/Research/model_pred_qb_epa.RDS")
@@ -79,6 +80,65 @@ compute_ewm <- function(dt, idcol, valcol, base, datecol = "game_date") {
   dt
 }
 
+# ---- 3-season window builder (no `get()`) ----
+build_windowed_features <- function(dt, entity, make_fn, base, keep_cols) {
+  seasons <- sort(unique(dt$season))
+  out_list <- vector("list", length(seasons))
+  j <- 0L
+  for (S in seasons) {
+    win <- (S - 2):S
+    sub <- dt[season %in% win]
+    sub[, anchor_season := S]
+    sub <- make_fn(sub, entity, base)          # add EWM cols grouped by anchor season + entity
+    # snapshot first play of each game (what we knew at kickoff)
+    snap <- sub[, .SD[1L], by = c("season", "game_id", "game_date", entity)]
+    # keep rows for anchor season S only
+    snap <- snap[season == S]
+    # select just the columns we want
+    snap <- snap[, ..keep_cols]
+    j <- j + 1L
+    out_list[[j]] <- snap
+  }
+  rbindlist(out_list[seq_len(j)], use.names = TRUE, fill = TRUE)
+}
+
+# ---- offense maker (no `get()`) ----
+off_make <- function(dt, entity, base_off) {
+  # order by entity + game
+  setorderv(dt, c(entity, "game_date", "game_id", "play_id"))
+  # days gap per entity
+  dt[, days_gap := pmax(0, as.numeric(game_date - shift(game_date, type = "lag", fill = first(game_date)))),
+     by = entity]
+  # EWM reset per (anchor_season, entity)
+  dt[, ewm_epa_play     := ewm_irregular_lagged(epa,     days_gap, base_off), by = c("anchor_season", entity)]
+  dt[, ewm_success_rate := ewm_irregular_lagged(success, days_gap, base_off), by = c("anchor_season", entity)]
+  dt[, ewm_proe         := ewm_irregular_lagged(pass_oe, days_gap, base_off), by = c("anchor_season", entity)]
+  dt
+}
+
+# ---- defense maker (no `get()`) ----
+def_make <- function(dt, entity, base_def) {
+  setorderv(dt, c(entity, "game_date", "game_id", "play_id"))
+  dt[, days_gap := pmax(0, as.numeric(game_date - shift(game_date, type = "lag", fill = first(game_date)))),
+     by = entity]
+  dt[, ewm_epa_play     := ewm_irregular_lagged(epa,     days_gap, base_def), by = c("anchor_season", entity)]
+  dt[, ewm_success_rate := ewm_irregular_lagged(success, days_gap, base_def), by = c("anchor_season", entity)]
+  dt
+}
+
+# ---- QB maker (no `get()`) ----
+qb_make <- function(dt, entity, base_qb) {
+  setorderv(dt, c(entity, "game_date", "game_id", "play_id"))
+  dt[, days_gap := pmax(0, as.numeric(game_date - shift(game_date, type = "lag", fill = first(game_date)))),
+     by = entity]
+  dt[, ewm_qb_epa_play := ewm_irregular_lagged(qb_epa, days_gap, base_qb), by = c("anchor_season", entity)]
+  dt[, dbs := shift(cumsum(!is.na(epa))), by = entity]
+  # predict with the features we just built
+  dt[, pred_qb_epa := predict(model_pred_qb_epa, .SD[, .(ewm_qb_epa_play, dbs)])]
+  dt
+}
+
+
 # ===============================================
 # Optimizer Function
 # ===============================================
@@ -87,40 +147,33 @@ optimize_spread <- function(bases) {
   base_def <- bases[2]
   base_qb  <- bases[3]
   
-  # offense EWM
-  off_dt <- data[, .(season, posteam, game_id, game_date, epa, success, pass_oe)]
-  off_dt <- compute_ewm(off_dt, "posteam", "epa", base_off)
-  off_dt[, `:=`(
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_off),
-    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base_off),
-    ewm_proe = ewm_irregular_lagged(pass_oe, days_gap, base_off)
-  ), by = posteam]
-  offense_data <- off_dt[, .(epa_pp = first(ewm_epa_play),
-                             sr = first(ewm_success_rate),
-                             proe = first(ewm_proe)), 
-                         by = .(season, posteam, game_id, game_date)]
+  # ---- offense windowed (3-season) ----
+  off_keep <- c("season","game_id","game_date","posteam",
+                "ewm_epa_play","ewm_success_rate","ewm_proe")
+  off_dt <- data[, .(season, posteam, game_id, game_date, play_id, epa, success, pass_oe)]
+  offense_data <- build_windowed_features(off_dt, "posteam", off_make, base_off, off_keep)
+  setnames(offense_data,
+           c("ewm_epa_play","ewm_success_rate","ewm_proe"),
+           c("epa_pp","sr","proe"))
   
-  # defense EWM
-  def_dt <- data[, .(season, defteam, game_id, game_date, epa, success)]
-  def_dt <- compute_ewm(def_dt, "defteam", "epa", base_def)
-  def_dt[, `:=`(
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_def),
-    ewm_success_rate = ewm_irregular_lagged(success, days_gap, base_def)
-  ), by = defteam]
-  defense_data <- def_dt[, .(epa_pp_allowed = first(ewm_epa_play),
-                             sr_allowed = first(ewm_success_rate)),
-                         by = .(season, defteam, game_id, game_date)]
+  # ---- defense windowed (3-season) ----
+  def_keep <- c("season","game_id","game_date","defteam",
+                "ewm_epa_play","ewm_success_rate")
+  def_dt <- data[, .(season, defteam, game_id, game_date, play_id, epa, success)]
+  defense_data <- build_windowed_features(def_dt, "defteam", def_make, base_def, def_keep)
+  setnames(defense_data,
+           c("ewm_epa_play","ewm_success_rate"),
+           c("epa_pp_allowed","sr_allowed"))
   
-  # qb EWM
+  # ---- QB windowed (3-season) ----
+  qb_keep <- c("season","game_id","game_date","id",
+               "ewm_qb_epa_play","dbs","pred_qb_epa")
   qb_dt <- data[id %in% master_id_list,
-                .(season, name, id, game_id, game_date,
-                  qb_epa, qb_dropback, play_type, epa)]
-  qb_dt <- compute_ewm(qb_dt, "id", "qb_epa", base_qb)
-  qb_dt[, dbs := shift(cumsum(!is.na(epa))), by = id]
-  qb_dt[, pred_qb_epa := predict(model_pred_qb_epa, .SD[, .(ewm, dbs)])]
-  qb_data <- qb_dt[, .(qb_epa = first(ewm), dbs = first(dbs),
-                       pred_qb_epa = first(pred_qb_epa)),
-                   by = .(season, id, game_id, game_date)]
+                .(season, id, game_id, game_date, play_id, qb_epa, epa)]
+  qb_data <- build_windowed_features(qb_dt, "id", qb_make, base_qb, qb_keep)
+  setnames(qb_data, "ewm_qb_epa_play", "qb_epa")
+  
+  
   
   # join datasets efficiently
   setkey(games, game_id, game_date)
@@ -145,7 +198,7 @@ optimize_spread <- function(bases) {
   # faster GAM fit
   model <- bam(point_diff ~ home_epa_pp + away_epa_pp_allowed +
                  away_epa_pp + home_epa_pp_allowed +
-                 s(pred_qb_epa_home) + s(pred_qb_epa_away),
+                 s(pred_qb_epa_home, home_proe) + s(pred_qb_epa_away, away_proe),
                data = df_train, method = "fREML",
                discrete = TRUE, nthreads = max(1, detectCores() - 1))
   df_test[, proj_spread := predict(model, df_test)]
@@ -157,16 +210,26 @@ optimize_spread <- function(bases) {
 # ===============================================
 # Parallel DEoptim Setup
 # ===============================================
-cl <- makeCluster(detectCores() - 1, type = "PSOCK")
+cl <- makeCluster(detectCores() - 3, type = "PSOCK")
 clusterEvalQ(cl, {
   library(data.table)
   library(mgcv)
   library(Metrics)
+  library(tidyverse)
   NULL
 })
-clusterExport(cl, c("optimize_spread", "data", "games", "master_id_list",
-                    "ewm_irregular_lagged", "model_pred_qb_epa"),
-              envir = environment())
+clusterExport(
+  cl,
+  c(
+    "optimize_spread",
+    "data", "games", "master_id_list",
+    "ewm_irregular_lagged", "model_pred_qb_epa","compute_ewm",
+    # NEW helpers used on workers:
+    "build_windowed_features", "off_make", "def_make", "qb_make"
+  ),
+  envir = environment()
+)
+
 
 ctrl <- DEoptim.control(
   steptol = 5, itermax = 20, trace = TRUE,
@@ -177,7 +240,7 @@ set.seed(1)
 result <- DEoptim(
   fn = optimize_spread,
   lower = c(.9, .9, .9),
-  upper = c(.999, .999, .999),
+  upper = c(1, 1, 1),
   control = ctrl
 )
 
