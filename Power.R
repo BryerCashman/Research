@@ -16,10 +16,9 @@ load(path)
 path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/model_pred_qb_epa.RDS","/Users/bryer/Documents/GitHub/Research/model_pred_qb_epa.RDS")
 load( file = path)
 
-betas <- c(0.99141, 0.95936, 0.92907)
-base_off <- betas[1]
-base_def <- betas[2]
-base_qb <- betas[3]
+base_qb <- 0.9992757
+base_off <- 0.9962453
+base_def <- 0.9958141
 
 data <- load_pbp(2023:2025) %>%
   filter((rush == 1 | pass == 1) ) %>%
@@ -43,7 +42,7 @@ sunday <- schedule %>%
   pull(date) %>%
   as.Date()
 
-master_qb_list <- rbind(schedule %>% select(name = home_qb),schedule %>% select(name = away_qb))  %>% unique()
+master_qb_list <- rbind(schedule %>% select(name = home_qb),schedule %>% select(name = away_qb))  %>% unique() %>% rbind(data.frame(name = c("A.Dalton")))
 
 offense_data <- data %>%
   filter(!is.na(posteam)) %>%
@@ -89,7 +88,7 @@ qb_data <- data %>%
          ewm_qb_epa_play = qb_epa_per_play,
          dbs = total_dbs,
          qb_pred_epa = predict(model_pred_qb_epa, pick(ewm_qb_epa_play, dbs))) %>%
-  filter(dropbacks_per_game > 3 ) %>%
+  filter(dropbacks_per_game > 3  ) %>%
   select(-ewm_qb_epa_play, -total_dbs)
 
 
@@ -110,7 +109,7 @@ current_qbs <- rbind(schedule %>% select(team = home_team,qb = home_qb,week) %>%
   select(team,qb) %>%
   unique()
 
-current_qbs <- current_qbs %>% mutate(qb = ifelse(team == "BAL","L.Jackson",qb))
+current_qbs <- current_qbs %>% mutate(qb = ifelse(team == "CAR","A.Dalton",qb))
 
 matchups <- left_join(matchups,current_qbs, by = c("Home_Team" = "team")) %>% rename(home_qb = qb)
 matchups <- left_join(matchups,current_qbs, by = c("Away_Team" = "team")) %>% rename(away_qb = qb)
@@ -169,13 +168,13 @@ weekly_projections <- inner_join(weekly_projections,weekly_games,by = c("matchup
 
 top_teams <- ratings %>%
   select(team,total) %>%
-  slice_max(order_by = total,n =16) %>%
+  slice_max(order_by = total,n =16, with_ties = F) %>%
   mutate(Rank = row_number()) %>%
   select(Rank,team,total)
 
 bot_teams <- ratings %>%
   select(team2 = team,total2 = total) %>%
-  slice_min(order_by = total2,n =16) %>%
+  slice_min(order_by = total2,n =16, with_ties = F) %>%
   arrange(desc(total2)) %>%
   mutate(Rank2 = row_number() + 16) %>%
   select(Rank2,team2,total2)

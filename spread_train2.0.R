@@ -615,14 +615,14 @@ library(DEoptim)
 ctrl <- DEoptim.control(
   steptol = 5, itermax = 20, trace = TRUE, NP = 30, parallelType = 1,
   packages = c("tidyverse","mgcv","stringr"),
-  parVar = c("model_pred_qb_epa","master_id_list")
+  parVar = c("model_pred_qb_epa","master_id_list","ewm_irregular_lagged","data","games")
 )
 
 set.seed(1)
 result <- DEoptim(
   fn    = optimize_spread,
   lower = c(.9,.9,.9),
-  upper = c(.999,.999,.999),
+  upper = c(1,1,1),
   control = ctrl
 )
 
