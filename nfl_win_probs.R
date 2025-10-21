@@ -5,9 +5,10 @@ library(odbc)
 
 computer <- "h"
 
-path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/proj_model.RDS","/Users/bryer/Documents/GitHub/Research/proj_model.RDS")
-
+path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/proj_model_new.RDS","/Users/bryer/Documents/GitHub/Research/proj_model_new.RDS")
 load(path)
+path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/model_pred_qb_epa.RDS","/Users/bryer/Documents/GitHub/Research/model_pred_qb_epa.RDS")
+load( file = path)
 
 ewm_irregular_lagged <- function(x, days_gap, base) {
   stopifnot(length(x) == length(days_gap))
@@ -26,7 +27,9 @@ ewm_irregular_lagged <- function(x, days_gap, base) {
   out
 }
 
-base <- optimal_beta <- 0.9974176
+base_qb <- 0.9992757
+base_off <- 0.9962453
+base_def <- 0.9958141
 
 data <- load_pbp(2021:2025) %>%
   filter((rush == 1 | pass == 1) ) %>%
@@ -35,7 +38,6 @@ data <- load_pbp(2021:2025) %>%
          game_date = as.Date(game_date))
 
 
-B <- optimal_beta <- 0.9974176
 
 schedule <- load_schedules() %>% filter(season %in% c(2021:2025)) %>%
   mutate(home_qb = str_c(str_sub(home_qb_name, 1, 1), ".", str_extract(home_qb_name, "[^ ]+$")),
@@ -54,12 +56,14 @@ offense_2123 <- data %>%
       dg <- as.numeric(game_date - lag(game_date, default = first(game_date)))
       pmax(0, replace(dg, is.na(dg), 0))
     },
-
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base)
+    ewm_proe = ifelse(!is.na(pass_oe),ewm_irregular_lagged(pass_oe[!is.na(pass_oe)], days_gap[!is.na(pass_oe)], base_off),NA),
+    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_off)
   ) %>%
   ungroup() %>%
   group_by(season, posteam, game_id, game_date) %>%
-  summarize(epa_pp = first(ewm_epa_play), .groups = "drop") 
+  summarize(epa_pp = first(ewm_epa_play),
+            proe = first(ewm_proe), 
+            .groups = "drop") 
 
 
 offense_2224 <- data %>%
@@ -73,12 +77,14 @@ offense_2224 <- data %>%
       dg <- as.numeric(game_date - lag(game_date, default = first(game_date)))
       pmax(0, replace(dg, is.na(dg), 0))
     },
-    
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base)
+    ewm_proe = ifelse(!is.na(pass_oe),ewm_irregular_lagged(pass_oe[!is.na(pass_oe)], days_gap[!is.na(pass_oe)], base_off),NA),
+    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_off)
   ) %>%
   ungroup() %>%
   group_by(season, posteam, game_id, game_date) %>%
-  summarize(epa_pp = first(ewm_epa_play), .groups = "drop") %>%
+  summarize(epa_pp = first(ewm_epa_play),
+            proe = first(ewm_proe),
+            .groups = "drop") %>%
   filter(season == 2024)
 
 offense_2325 <- data %>%
@@ -92,12 +98,14 @@ offense_2325 <- data %>%
       dg <- as.numeric(game_date - lag(game_date, default = first(game_date)))
       pmax(0, replace(dg, is.na(dg), 0))
     },
-    
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base)
+    ewm_proe = ifelse(!is.na(pass_oe),ewm_irregular_lagged(pass_oe[!is.na(pass_oe)], days_gap[!is.na(pass_oe)], base_off),NA),
+    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_off)
   ) %>%
   ungroup() %>%
   group_by(season, posteam, game_id, game_date) %>%
-  summarize(epa_pp = first(ewm_epa_play), .groups = "drop") %>%
+  summarize(epa_pp = first(ewm_epa_play), 
+            proe = first(ewm_proe), 
+            .groups = "drop") %>%
   filter(season == 2025)
 
 offense_full <- rbind(offense_2123,offense_2224, offense_2325)
@@ -117,14 +125,16 @@ qb_data2123 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     # EWM of qb_epa known *before* this play
-    ewm_qb_epa_play = ewm_irregular_lagged(qb_epa, days_gap, base),
-    dbs = lag(cumsum(!is.na(epa)))
+    ewm_qb_epa_play = ewm_irregular_lagged(qb_epa, days_gap, base_qb),
+    dbs = lag(cumsum(!is.na(epa))),
+    pred_qb_epa = predict(model_pred_qb_epa, pick(ewm_qb_epa_play, dbs))
   ) %>%
   ungroup() %>%
   # snapshot what we knew at kickoff: take the first play's value for each game
   group_by(season, name, id, game_id, game_date) %>%
   summarize(qb_epa = first(ewm_qb_epa_play), 
             dbs = first(dbs),
+            qb_pred_epa = first(pred_qb_epa),
             .groups = "drop")
 
 qb_data2224 <- data %>%
@@ -141,14 +151,16 @@ qb_data2224 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     # EWM of qb_epa known *before* this play
-    ewm_qb_epa_play = ewm_irregular_lagged(qb_epa, days_gap, base),
-    dbs = lag(cumsum(!is.na(epa)))
+    ewm_qb_epa_play = ewm_irregular_lagged(qb_epa, days_gap, base_qb),
+    dbs = lag(cumsum(!is.na(epa))),
+    pred_qb_epa = predict(model_pred_qb_epa, pick(ewm_qb_epa_play, dbs))
   ) %>%
   ungroup() %>%
   # snapshot what we knew at kickoff: take the first play's value for each game
   group_by(season, name, id, game_id, game_date) %>%
   summarize(qb_epa = first(ewm_qb_epa_play), 
             dbs = first(dbs), 
+            qb_pred_epa = first(pred_qb_epa),
             .groups = "drop") %>%
   filter(season == 2024)
 
@@ -166,14 +178,16 @@ qb_data2325 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     # EWM of qb_epa known *before* this play
-    ewm_qb_epa_play = ewm_irregular_lagged(qb_epa, days_gap, base),
-    dbs = lag(cumsum(!is.na(epa)))
+    ewm_qb_epa_play = ewm_irregular_lagged(qb_epa, days_gap, base_qb),
+    dbs = lag(cumsum(!is.na(epa))),
+    pred_qb_epa = predict(model_pred_qb_epa, pick(ewm_qb_epa_play, dbs))
   ) %>%
   ungroup() %>%
   # snapshot what we knew at kickoff: take the first play's value for each game
   group_by(season, name, id, game_id, game_date) %>%
   summarize(qb_epa = first(ewm_qb_epa_play), 
             dbs = first(dbs), 
+            qb_pred_epa = first(pred_qb_epa),
             .groups = "drop") %>%
   filter(season == 2025)
 
@@ -192,7 +206,7 @@ defense_2123 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base)
+    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_def)
   ) %>%
   ungroup() %>%
   group_by(season, defteam, game_id, game_date) %>%
@@ -210,7 +224,7 @@ defense_2224 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base)
+    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_def)
   ) %>%
   ungroup() %>%
   group_by(season, defteam, game_id, game_date) %>%
@@ -229,7 +243,7 @@ defense_2325 <- data %>%
       pmax(0, replace(dg, is.na(dg), 0))
     },
     
-    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base)
+    ewm_epa_play = ewm_irregular_lagged(epa, days_gap, base_def)
   ) %>%
   ungroup() %>%
   group_by(season, defteam, game_id, game_date) %>%
@@ -244,21 +258,21 @@ df_spreads <- schedule %>%
   filter(result != 0) %>%
   select(game_id,home_team, away_team, home_qb, home_qb_id, away_qb, away_qb_id, result) %>%
   left_join(offense_full, by = c("game_id", "home_team" = "posteam")) %>%
-  rename(home_epa_pp = epa_pp) %>%
+  rename(home_epa_pp = epa_pp, home_proe = proe) %>%
   left_join(offense_full, by = c("game_id","game_date", "away_team" = "posteam")) %>%
-  rename(away_epa_pp = epa_pp) %>%
+  rename(away_epa_pp = epa_pp, away_proe = proe) %>%
   left_join(qb_data, by = c("game_id","game_date", "home_qb_id" = "id")) %>%
-  rename(home_qb_epa_per_play = qb_epa, home_total_db = dbs ) %>%
+  rename(home_qb_epa_per_play = qb_epa, home_total_db = dbs, home_qb_pred_epa = qb_pred_epa ) %>%
   left_join(qb_data, by = c("game_id","game_date", "away_qb_id" = "id")) %>%
-  rename(away_qb_epa_per_play = qb_epa, away_total_db = dbs ) %>%
+  rename(away_qb_epa_per_play = qb_epa, away_total_db = dbs, away_qb_pred_epa = qb_pred_epa) %>%
   left_join(defense, by = c("game_id","game_date", "home_team" = "defteam")) %>%
   rename(home_epa_pp_allowed = "epa_pp_allowed") %>%
   left_join(defense, by = c("game_id","game_date", "away_team" = "defteam")) %>%
   rename(away_epa_pp_allowed = "epa_pp_allowed") %>%
-  mutate(weight = ifelse(season.x == 2021,1,2),
+  mutate(weight = ifelse(season.x == 2021,1,3),
          home_w = ifelse(result > 0, 1,0))
 
-df_spreads$x_point_diff <- predict(proj_model, df_spreads, type = "response")
+df_spreads$x_point_diff <- predict(model_proj_spread2, df_spreads, type = "response")
 
 dt <- sample(nrow(df_spreads), .75 * nrow(df_spreads))
 train <- df_spreads[dt,]
@@ -280,21 +294,23 @@ ggplot(grid, aes(x_point_diff, home_wp)) +
 
 model_home_wp <- model_wp
 
-save(model_home_wp, file = "C:/Users/b.cashman/Documents/R scripts/NFL/model_nfl_total.RDS")
+save(model_home_wp, file = "/Users/bryer/Documents/GitHub/Research/model_nfl_home_wp.RDS")
 
 
 #### Comparison
 home_teams <- test %>%
   drop_na(home_wp) %>%
   dplyr::select(game_id, team = home_team, opponent = away_team, wp = home_wp, win = home_w,game_date) %>%
-  inner_join(schedule %>% select(game_id,ml = home_moneyline))
+  inner_join(schedule %>% select(game_id,ml = home_moneyline)) %>%
+  filter(game_id > "2021_18", !grepl("18", game_id))
 
 away_teams <- test %>%
   drop_na(home_wp) %>%
   mutate(away_wp = 1 - home_wp,
          away_w = 1 - home_w) %>%
   dplyr::select(game_id, team = away_team, opponent = home_team, wp = away_wp, win = away_w, game_date) %>%
-  inner_join(schedule %>% select(game_id, ml = away_moneyline))
+  inner_join(schedule %>% select(game_id, ml = away_moneyline)) %>%
+  filter(game_id > "2021_18", !grepl("18", game_id))
 
 full <- rbind(home_teams, away_teams)
 
@@ -383,8 +399,19 @@ df_ratios <- full %>%
 
 summary(lm(units ~ ratio, data = df_ratios))
 summary(lm(units ~ diff, data = df_ratios))
+summary(mgcv::gam(units ~ s(ratio), data = df_ratios))
+
+model <- lm(units ~ diff, data = df_ratios)
 
 groups <- df_ratios %>%
   dplyr::summarize(greater_1.2 = sum(units[ratio > 1.2]),
                    greater_1 = sum(units[ratio > 1]),
                    greater_1.4 = sum(units[ratio > 1.4]))
+
+grid <- expand.grid(ratio = c(0)/100, diff = c(-30:30)/100)
+
+grid$eu <- predict(model, grid)
+
+ggplot(grid, aes(diff, eu)) +
+  geom_line() +
+  theme_bw()
