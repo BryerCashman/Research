@@ -45,11 +45,13 @@ sim_ros_fast <- function(runs = 100) {
     new_cor <- MASS::mvrnorm(n = 32, mu = rep(0, 2), Sigma = sigma)
     
     # Update ratings in place
-    new_ratings[, c("qb_epa_per_play", "epa_per_play") :=
-                  .(qb_epa_per_play + new_cor[,1],
+    new_ratings[, c("qb_pred_epa", "epa_per_play") :=
+                  .(qb_pred_epa + new_cor[,1],
                     epa_per_play + new_cor[,2])
     ]
     new_ratings[, epa_per_play_allowed := epa_per_play_allowed + rnorm(.N, sd = def_epa_sd)]
+    new_ratings[, proe := proe + rnorm(.N, sd = 1.5)]
+    
     
     # Build per-game data quickly via indices (no joins)
     df <- copy(sched)
@@ -57,19 +59,19 @@ sim_ros_fast <- function(runs = 100) {
     # Pull columns via vectorized indexing
     df[, `:=`(
       home_epa_pp          = new_ratings$epa_per_play[home_idx],
-      home_qb_epa_per_play = new_ratings$qb_epa_per_play[home_idx],
+      home_qb_pred_epa = new_ratings$qb_pred_epa[home_idx],
       home_epa_pp_allowed  = new_ratings$epa_per_play_allowed[home_idx],
-      home_total_db        = new_ratings$total_dbs[home_idx],
+      home_proe  = new_ratings$proe[home_idx],
       away_epa_pp          = new_ratings$epa_per_play[away_idx],
-      away_qb_epa_per_play = new_ratings$qb_epa_per_play[away_idx],
+      away_qb_pred_epa  = new_ratings$qb_pred_epa[away_idx],
       away_epa_pp_allowed  = new_ratings$epa_per_play_allowed[away_idx],
-      away_total_db        = new_ratings$total_dbs[away_idx],
+      away_proe  = new_ratings$proe[away_idx],
       sim                  = i
     )]
     
     # Predictions (keep predict if models are not plain GLM/lm)
     # Note: set stringsAsFactors/factor levels up-front to avoid coercion costs
-    df[, x_point_diff := predict(proj_model, newdata = df)]
+    df[, x_point_diff := predict(model_proj_spread2, newdata = df)]
     df[, home_wp      := predict(model_home_wp, newdata = df, type = "response")]
     
     # Resolve winners only for undecided games

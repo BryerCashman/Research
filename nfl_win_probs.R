@@ -3,7 +3,7 @@ library(nflreadr)
 library(mgcv)
 library(odbc)
 
-computer <- "h"
+computer <- "W"
 
 path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/proj_model_new.RDS","/Users/bryer/Documents/GitHub/Research/proj_model_new.RDS")
 load(path)
@@ -392,7 +392,9 @@ Metrics::logLoss(full$win, full$implied_wp)
 df_ratios <- full %>%
   mutate(ratio = wp/implied_wp,
          units = ifelse(win == 1, ifelse(ml > 0, ml/100, 100/abs(ml) ), -1),
-         diff = wp - implied_wp) %>%
+         diff = wp - implied_wp,
+         unit_win = ifelse(ml > 0, ml/100, 100/abs(ml)),
+         ev = wp * unit_win - (1-wp)) %>%
   filter(game_id > "2021_08",
          !grepl("18",game_id))
 
@@ -400,18 +402,24 @@ df_ratios <- full %>%
 summary(lm(units ~ ratio, data = df_ratios))
 summary(lm(units ~ diff, data = df_ratios))
 summary(mgcv::gam(units ~ s(ratio), data = df_ratios))
+summary(lm(units ~ ev, data = df_ratios))
 
-model <- lm(units ~ diff, data = df_ratios)
+model <- lm(units ~ ratio, data = df_ratios)
 
 groups <- df_ratios %>%
   dplyr::summarize(greater_1.2 = sum(units[ratio > 1.2]),
                    greater_1 = sum(units[ratio > 1]),
-                   greater_1.4 = sum(units[ratio > 1.4]))
+                   greater_1.4 = sum(units[ratio > 1.4]),
+                   greater_1.6 = sum(units[ratio > 1.6]))
 
-grid <- expand.grid(ratio = c(0)/100, diff = c(-30:30)/100)
+grid <- expand.grid(ratio = c(0:200)/100, diff = c(0))
 
 grid$eu <- predict(model, grid)
 
-ggplot(grid, aes(diff, eu)) +
+ggplot(grid, aes(ratio, eu)) +
   geom_line() +
   theme_bw()
+
+model_nfl_ml_eu <- model
+
+save(model_nfl_ml_eu, file = "C:/Users/b.cashman/Documents/GitHub/Research/model_nfl_ml_eu.RDS" )

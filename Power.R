@@ -26,7 +26,7 @@ data <- load_pbp(2023:2025) %>%
 
 
 B <- optimal_beta <- 0.9974176
-current_week <- 8
+current_week <- 9
 
 schedule <- load_schedules() %>% filter(season == 2025) %>%
   mutate(home_qb = str_c(str_sub(home_qb_name, 1, 1), ".", str_extract(home_qb_name, "[^ ]+$")),
@@ -241,7 +241,7 @@ wordmark <- df %>%
 
 wordmark
 
-wordmark %>% 
+ wordmark %>% 
   gtsave(paste0("/Users/bryer/Documents/NFL Projects/Power Ratings/wordmark",current_week,".png"))
 
 
