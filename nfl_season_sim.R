@@ -31,7 +31,7 @@ schedule <- schedule %>%
   mutate(divisional_game = ifelse(home_div == away_div, 1,0),
          conference_game = ifelse(home_conf == away_conf, 1, 0))
 
-computer <- "W"
+computer <- "g"
 
 path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/proj_model_new.RDS","/Users/bryer/Documents/GitHub/Research/proj_model_new.RDS")
 load(path)
@@ -117,7 +117,7 @@ current_qbs <- rbind(schedule %>% dplyr::select(team = home_team,qb = home_qb,we
   dplyr::select(team,qb) %>%
   unique()
 
-current_qbs <- current_qbs %>% mutate(qb = ifelse(team == "CAR","A.Dalton",qb))
+current_qbs <- current_qbs %>% mutate(qb = ifelse(team == "SF","M.Jones",qb))
 
 
 current_ratings <- current_qbs %>%
@@ -126,9 +126,9 @@ current_ratings <- current_qbs %>%
   inner_join(defense_data %>% dplyr::select(defteam, epa_per_play_allowed), by = c("team" = "defteam"))
 
 ### Injured qbs
-QB <- "J.Daniels"
-Team <- "WAS"
-week_return <- 10
+QB <- "B.Young"
+Team <- "CAR"
+week_return <- 12
 
 if(!is.na(QB)){
 games_after_return <- sum(schedule$home_team[schedule$week >= week_return] == Team) + sum(schedule$away_team[schedule$week >= week_return] == Team)
@@ -333,4 +333,4 @@ get_win_total_prob <- function(df,
   out
 }
 
-get_win_total_prob(win_distribution,"CHI","Over",9)
+get_win_total_prob(win_distribution,"KC","Under",11)
