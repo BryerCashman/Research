@@ -26,7 +26,7 @@ data <- load_pbp(2023:2025) %>%
 
 
 B <- optimal_beta <- 0.9974176
-current_week <- 9
+current_week <- 10
 
 schedule <- load_schedules() %>% filter(season == 2025) %>%
   mutate(home_qb = str_c(str_sub(home_qb_name, 1, 1), ".", str_extract(home_qb_name, "[^ ]+$")),
@@ -42,7 +42,7 @@ sunday <- schedule %>%
   pull(date) %>%
   as.Date()
 
-master_qb_list <- rbind(schedule %>% select(name = home_qb),schedule %>% select(name = away_qb))  %>% unique() %>% rbind(data.frame(name = c("A.Dalton")))
+master_qb_list <- rbind(schedule %>% select(name = home_qb),schedule %>% select(name = away_qb))  %>% unique() %>% rbind(data.frame(name = c("D.Mills")))
 
 offense_data <- data %>%
   filter(!is.na(posteam)) %>%
@@ -88,7 +88,6 @@ qb_data <- data %>%
          ewm_qb_epa_play = qb_epa_per_play,
          dbs = total_dbs,
          qb_pred_epa = predict(model_pred_qb_epa, pick(ewm_qb_epa_play, dbs))) %>%
-  filter(dropbacks_per_game > 3  ) %>%
   select(-ewm_qb_epa_play, -total_dbs)
 
 
@@ -109,7 +108,7 @@ current_qbs <- rbind(schedule %>% select(team = home_team,qb = home_qb,week) %>%
   select(team,qb) %>%
   unique()
 
-current_qbs <- current_qbs %>% mutate(qb = ifelse(team == "CAR","A.Dalton",qb))
+current_qbs <- current_qbs %>% mutate(qb = ifelse(team == "NYJ","J.Fields",qb))
 
 matchups <- left_join(matchups,current_qbs, by = c("Home_Team" = "team")) %>% rename(home_qb = qb)
 matchups <- left_join(matchups,current_qbs, by = c("Away_Team" = "team")) %>% rename(away_qb = qb)
