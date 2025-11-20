@@ -4,6 +4,7 @@ library(MASS)
 library(mgcv)
 library(nflseedR)
 library(nflreadr)
+library(openxlsx)
 
 
 
@@ -23,6 +24,8 @@ schedule <- load_schedules(2025) %>%
 
 teams <- load_teams() %>% dplyr::select(team_abbr, team_conf, team_division)
 
+
+
 schedule <- schedule %>%
   inner_join(teams, by = c("home_team" = "team_abbr")) %>%
   rename(home_conf = team_conf, home_div = team_division) %>%
@@ -31,7 +34,7 @@ schedule <- schedule %>%
   mutate(divisional_game = ifelse(home_div == away_div, 1,0),
          conference_game = ifelse(home_conf == away_conf, 1, 0))
 
-computer <- "g"
+computer <- "W"
 
 path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/proj_model_new.RDS","/Users/bryer/Documents/GitHub/Research/proj_model_new.RDS")
 load(path)
@@ -43,7 +46,6 @@ path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/si
 source(path)
 path <- ifelse(computer == "W", "C:/Users/b.cashman/Documents/GitHub/Research/model_pred_qb_epa.RDS","/Users/bryer/Documents/GitHub/Research/model_pred_qb_epa.RDS")
 load( file = path)
-
 
 
 
@@ -117,7 +119,7 @@ current_qbs <- rbind(schedule %>% dplyr::select(team = home_team,qb = home_qb,we
   dplyr::select(team,qb) %>%
   unique()
 
-current_qbs <- current_qbs %>% mutate(qb = ifelse(team == "SF","M.Jones",qb))
+current_qbs <- current_qbs %>% mutate(qb = ifelse(team == "CLE","D.Gabriel",qb))
 
 
 current_ratings <- current_qbs %>%
@@ -126,9 +128,9 @@ current_ratings <- current_qbs %>%
   inner_join(defense_data %>% dplyr::select(defteam, epa_per_play_allowed), by = c("team" = "defteam"))
 
 ### Injured qbs
-QB <- "B.Young"
-Team <- "CAR"
-week_return <- 12
+QB <- "J.Daniels"
+Team <- "WAS"
+week_return <- 16
 
 if(!is.na(QB)){
 games_after_return <- sum(schedule$home_team[schedule$week >= week_return] == Team) + sum(schedule$away_team[schedule$week >= week_return] == Team)
@@ -204,6 +206,11 @@ rm(new_ratings, df_wins, home_wins, away_wins, total_wins)
 
 #system.time(sim_ros(1000))
 system.time(sim_wins <- sim_ros_fast(5000))
+#system.time(results <- sim_ros_fast_postseason(100))
+
+# sim_wins <- results$regular
+# playoffs <- results$playoffs
+
 
 
 win_stats <- sim_wins %>%
@@ -333,4 +340,45 @@ get_win_total_prob <- function(df,
   out
 }
 
-get_win_total_prob(win_distribution,"KC","Under",11)
+get_win_total_prob(win_distribution,"CLE","Under",5)
+
+
+
+
+####### excel updates
+sheet_exists <- function(wb, sheet) {
+  sheet %in% names(wb)
+}
+
+
+write_multiple_sheets <- function(dfs, path) {
+  stopifnot(is.list(dfs), !is.null(names(dfs)), all(nzchar(names(dfs))))
+  wb <- if (file.exists(path)) loadWorkbook(path) else createWorkbook()
+  
+  for (nm in names(dfs)) {
+    df <- dfs[[nm]]
+    if (!sheet_exists(wb, nm)) {
+      addWorksheet(wb, nm)
+      # nice defaults for a new sheet
+      freezePane(wb, nm, firstRow = TRUE)
+      setColWidths(wb, nm, cols = 1:NCOL(df), widths = "auto")
+    } else {
+      # Clear old values while keeping styles/CF intact.
+      # We’ll clear a large block to be safe (A1:ZZ100000) then write fresh data.
+      # (You can narrow this if you know your typical size.)
+      deleteData(wb, nm, cols = 1:50, rows = 1:100, gridExpand = TRUE)
+    }
+    
+    writeData(wb, nm, df, startCol = 1, startRow = 1, withFilter = TRUE)
+  }
+  
+  saveWorkbook(wb, path, overwrite = TRUE)
+}
+
+dfs <- list(Wins = win_stats,
+            Win_Distrubition = win_distribution,
+            Divisions_Playoffs = division_winners,
+            Best_Worst = best_worst)
+
+outfile <- "C:/Users/b.cashman/Documents/nfl_sim_results.xlsx"
+write_multiple_sheets(dfs, outfile)

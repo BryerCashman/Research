@@ -19,10 +19,11 @@ abbr <- as.data.frame(team_abbr_mapping)
 abbr <- rownames_to_column(abbr, var = "team") %>%
   filter(grepl(" ", team), !grepl("LOUIS", team), !grepl("RED", team), !grepl("DIEGO", team), !grepl("OAKLAND", team))
 spreads <- load_schedules(2022:2025) %>% dplyr::select(game_id, spread_line, total_line)
+sched <- load_schedules(2022:2025) %>% dplyr::select(game_id, gameday)
 
 snap_counts <- snap_counts %>% left_join(ids %>% dplyr::select(pfr_id, gsis_id), by = c("pfr_player_id" = "pfr_id")) %>% drop_na(player)
 
-opp_new <- opp %>% left_join(snap_counts, by = c("game_id","player_id" = "gsis_id", "season", "position"))
+opp_new <- opp %>% left_join(snap_counts, by = c("game_id","player_id" = "gsis_id", "season", "position")) %>% inner_join(sched, by = "game_id") %>% mutate(gameday = as.Date(gameday))
 
 ewm_irregular_lagged <- function(x, days_gap, base) {
   stopifnot(length(x) == length(days_gap))
@@ -117,33 +118,46 @@ offense_2425 <- data %>%
   filter(season != 2024)
 
 offense <- rbind(offense_2223, offense_2324, offense_2425)
+rm(offense_2223, offense_2324, offense_2425)
+
+b <- best_b
+
+optimize_tuddys <- function(b = 1){
 
 players2223 <- opp_new %>%
   filter(season %in% c(2022, 2023)) %>%
   group_by(player, player_id) %>%
   mutate(scored = ifelse(rec_touchdown > 0 | rush_touchdown > 0, 1, 0),
+         days_gap = {
+           dg <- as.numeric(gameday - lag(gameday, default = first(gameday)))
+           pmax(0, replace(dg, is.na(dg), 0))
+         },
          cum_rush = lag(cummean(rush_attempt)),
          cum_rec_air_yards = lag(cummean(rec_air_yards)),
          cum_receptions = lag(cummean(receptions)),
          cum_targets = lag(cummean(rec_attempt)),
-         cum_exp_receptions = lag(cummean(receptions_exp)),
+         cum_exp_receptions = ewm_irregular_lagged(rec_yards_gained_exp, days_gap, b),
          cum_rec_yds = lag(cummean(rec_yards_gained)),
          cum_rush_yds = lag(cummean(rush_yards_gained)),
-         cum_exp_rec_yds = lag(cummean(rec_yards_gained_exp)),
-         cum_exp_rush_yards = lag(cummean(rush_yards_gained_exp)),
-         cum_exp_rush_td = lag(cummean(rush_touchdown_exp)),
-         cum_exp_rec_td = lag(cummean(rec_touchdown_exp)),
-         cum_off_share = lag(cummean(offense_pct)),
+         cum_exp_rec_yds = ewm_irregular_lagged(rec_yards_gained_exp, days_gap, b),
+         cum_exp_rush_yards = ewm_irregular_lagged(rush_yards_gained_exp, days_gap, b),
+         cum_exp_rush_td = ewm_irregular_lagged(rush_touchdown_exp, days_gap, b),
+         cum_exp_rec_td = ewm_irregular_lagged(rec_touchdown_exp, days_gap, b),
+         cum_off_share = ewm_irregular_lagged(offense_pct, days_gap, b),
          games = lag(cumsum(!is.na(player)), default = 0)) %>%
   ungroup() %>%
   filter(season == 2023) %>%
-  dplyr::select(game_id, player, player_id, posteam,scored,  rush = cum_rush, adot = cum_rec_air_yards, receptions = cum_receptions, targets = cum_targets, x_receptions =cum_exp_receptions, rec_yds = cum_rec_yds,
+  dplyr::select(game_id, player, player_id, posteam,position,scored,  rush = cum_rush, adot = cum_rec_air_yards, receptions = cum_receptions, targets = cum_targets, x_receptions =cum_exp_receptions, rec_yds = cum_rec_yds,
                 rush_yds = cum_rush_yds, x_rec_yds = cum_exp_rec_yds, x_rush_yds = cum_exp_rush_yards, x_rush_td = cum_exp_rush_td, x_rec_td = cum_exp_rec_td, off_share = cum_off_share, games)
   
 players2324 <- opp_new %>%
   filter(season %in% c(2023, 2024)) %>%
   group_by(player, player_id) %>%
   mutate(scored = ifelse(rec_touchdown > 0 | rush_touchdown > 0, 1, 0),
+         days_gap = {
+           dg <- as.numeric(gameday - lag(gameday, default = first(gameday)))
+           pmax(0, replace(dg, is.na(dg), 0))
+         },
          cum_rush = lag(cummean(rush_attempt)),
          cum_rec_air_yards = lag(cummean(rec_air_yards)),
          cum_receptions = lag(cummean(receptions)),
@@ -151,21 +165,25 @@ players2324 <- opp_new %>%
          cum_exp_receptions = lag(cummean(receptions_exp)),
          cum_rec_yds = lag(cummean(rec_yards_gained)),
          cum_rush_yds = lag(cummean(rush_yards_gained)),
-         cum_exp_rec_yds = lag(cummean(rec_yards_gained_exp)),
-         cum_exp_rush_yards = lag(cummean(rush_yards_gained_exp)),
-         cum_exp_rush_td = lag(cummean(rush_touchdown_exp)),
-         cum_exp_rec_td = lag(cummean(rec_touchdown_exp)),
-         cum_off_share = lag(cummean(offense_pct)),
+         cum_exp_rec_yds = ewm_irregular_lagged(rec_yards_gained_exp, days_gap, b),
+         cum_exp_rush_yards = ewm_irregular_lagged(rush_yards_gained_exp, days_gap, b),
+         cum_exp_rush_td = ewm_irregular_lagged(rush_touchdown_exp, days_gap, b),
+         cum_exp_rec_td = ewm_irregular_lagged(rec_touchdown_exp, days_gap, b),
+         cum_off_share = ewm_irregular_lagged(offense_pct, days_gap, b),
          games = lag(cumsum(!is.na(player)), default = 0)) %>%
   ungroup() %>%
   filter(season == 2024) %>%
-  dplyr::select(game_id, player, player_id, posteam,scored,  rush = cum_rush, adot = cum_rec_air_yards, receptions = cum_receptions, targets = cum_targets, x_receptions =cum_exp_receptions, rec_yds = cum_rec_yds,
+  dplyr::select(game_id, player, player_id, posteam,position,scored,  rush = cum_rush, adot = cum_rec_air_yards, receptions = cum_receptions, targets = cum_targets, x_receptions =cum_exp_receptions, rec_yds = cum_rec_yds,
                 rush_yds = cum_rush_yds, x_rec_yds = cum_exp_rec_yds, x_rush_yds = cum_exp_rush_yards, x_rush_td = cum_exp_rush_td, x_rec_td = cum_exp_rec_td, off_share = cum_off_share, games)
 
 players2425 <- opp_new %>%
   filter(season %in% c(2024, 2025)) %>%
   group_by(player, player_id) %>%
   mutate(scored = ifelse(rec_touchdown > 0 | rush_touchdown > 0, 1, 0),
+         days_gap = {
+           dg <- as.numeric(gameday - lag(gameday, default = first(gameday)))
+           pmax(0, replace(dg, is.na(dg), 0))
+         },
          cum_rush = lag(cummean(rush_attempt)),
          cum_rec_air_yards = lag(cummean(rec_air_yards)),
          cum_receptions = lag(cummean(receptions)),
@@ -173,15 +191,15 @@ players2425 <- opp_new %>%
          cum_exp_receptions = lag(cummean(receptions_exp)),
          cum_rec_yds = lag(cummean(rec_yards_gained)),
          cum_rush_yds = lag(cummean(rush_yards_gained)),
-         cum_exp_rec_yds = lag(cummean(rec_yards_gained_exp)),
-         cum_exp_rush_yards = lag(cummean(rush_yards_gained_exp)),
-         cum_exp_rush_td = lag(cummean(rush_touchdown_exp)),
-         cum_exp_rec_td = lag(cummean(rec_touchdown_exp)),
-         cum_off_share = lag(cummean(offense_pct)),
+         cum_exp_rec_yds = ewm_irregular_lagged(rec_yards_gained_exp, days_gap, b),
+         cum_exp_rush_yards = ewm_irregular_lagged(rush_yards_gained_exp, days_gap, b),
+         cum_exp_rush_td = ewm_irregular_lagged(rush_touchdown_exp, days_gap, b),
+         cum_exp_rec_td = ewm_irregular_lagged(rec_touchdown_exp, days_gap, b),
+         cum_off_share = ewm_irregular_lagged(offense_pct, days_gap, b),
          games = lag(cumsum(!is.na(player)), default = 0)) %>%
   ungroup() %>%
   filter(season == 2025) %>%
-  dplyr::select(game_id, player, player_id, posteam,scored,  rush = cum_rush, adot = cum_rec_air_yards, receptions = cum_receptions, targets = cum_targets, x_receptions =cum_exp_receptions, rec_yds = cum_rec_yds,
+  dplyr::select(game_id, player, player_id, posteam,position,scored,  rush = cum_rush, adot = cum_rec_air_yards, receptions = cum_receptions, targets = cum_targets, x_receptions =cum_exp_receptions, rec_yds = cum_rec_yds,
                 rush_yds = cum_rush_yds, x_rec_yds = cum_exp_rec_yds, x_rush_yds = cum_exp_rush_yards, x_rush_td = cum_exp_rush_td, x_rec_td = cum_exp_rec_td, off_share = cum_off_share, games)
 
 players <- rbind(players2223, players2324, players2425)
@@ -195,14 +213,58 @@ dt <- sample(nrow(df_train), .7 * nrow(df_train))
 train <- df_train[dt,]
 test <- df_train[-dt,]
 
-simple <- glm(scored ~  epa_pp + x_rec_yds + x_rec_td + x_rush_yds + x_rush_td + spread_line + total_line, data = train, family = "binomial")
-summary(simple)
-complex <- mgcv::gam(scored ~  spread_line + total_line + s(x_rec_yds, x_rec_td) + s(x_rush_td, x_rush_yds) , data = train, family = "binomial")
+# simple <- glm(scored ~  epa_pp + x_rec_yds + x_rec_td + x_rush_yds + x_rush_td + spread_line + total_line, data = train, family = "binomial")
+# summary(simple)
+complex <- mgcv::gam(scored ~  spread_line + total_line + s(x_rec_yds, x_rec_td) + s(x_rush_td, x_rush_yds) + off_share , data = train, family = "binomial")
 summary(complex)
 
 test$prob_td <- predict(complex, test, type = "response")
+test$prob_td_w_share <- predict(complex, test ,type = "response")
 
-Metrics::logLoss(test$scored[!is.na(test$prob_td)], test$prob_td[!is.na(test$prob_td)])
+test$diff <- test$prob_td - test$prob_td_w_share
+
+rmse <- Metrics::logLoss(test$scored[!is.na(test$prob_td)], test$prob_td[!is.na(test$prob_td)])
+print(paste(b, " - ", rmse))
+return(rmse)
+}
+
+
+optimize(optimize_tuddys, c(.9,1))
+DEoptim::DEoptim(optimize_tuddys, lower = .9, upper = 1)
+
+best_b <- 0.9669514
+best_ll <- 0.4663232
+
+
+df <- data.frame()
+for(b in c(950:1000)/1000){
+
+  num <- optimize_tuddys(b)
+  df <- rbind(df, data.frame(beta = b, ll = num))
+}
+
+ggplot(df, aes(beta, ll)) +
+  geom_line() +
+  theme_bw() +
+  geom_smooth()
+
+
+library(withr)
+
+# fixed seeds shared by all Betas (or precomputed CV splits)
+set.seed(1)
+seeds <- sample.int(.Machine$integer.max, 15)
+
+rmse_avg <- function(b) {
+  vals <- vapply(seeds, function(s) with_seed(s, optimize_tuddys(b)), numeric(1))
+  mean(vals)              # or median(vals) / trimmed mean
+}
+
+# 1-D is cheap to search with Brent
+res <- optimize(rmse_avg, c(0.9, 1.00), tol = 1e-4)
+beta_hat <- res$minimum
+
+
 
 grid <- expand.grid(total_line = c(45), spread_line = c(-100:100)/10, x_rec_td = c(.4), x_rush_td = c(.1), x_rec_yds = c(50), x_rush_yds = c(3))
 grid$prob_td <- predict(complex, grid, type = "response")
@@ -330,4 +392,23 @@ save(model_td_scorer_eu, file = "C:/Users/b.cashman/Documents/GitHub/Research/mo
 #                    adot = first(adot)
 #                    ) %>% 
 #   filter(season == 2023)
+
+
+
+############# Positional Tests
+complex <- mgcv::gam(scored ~  spread_line + total_line + s(x_rec_yds, x_rec_td) + s(x_rush_td, x_rush_yds) + off_share, data = train, family = "binomial")
+test$prob_td <- predict(complex, test, type = "response")
+
+
+
+qbs <- test %>% filter(position == "QB")
+wrs <- test %>% filter(position == "WR" | position == "TE")
+rbs <- test %>% filter(position == "RB")
+
+
+
+
+Metrics::logLoss(qbs$scored[!is.na(qbs$prob_td)], qbs$prob_td[!is.na(qbs$prob_td)])
+Metrics::logLoss(wrs$scored[!is.na(wrs$prob_td)], wrs$prob_td[!is.na(wrs$prob_td)])
+Metrics::logLoss(rbs$scored[!is.na(rbs$prob_td)], rbs$prob_td[!is.na(rbs$prob_td)])
 
